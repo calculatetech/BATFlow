@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BATFlow — DOS 7.1 Visual Batch Editor</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>BATFlow</h1>
+      <span>Win98 MS-DOS 7.1 visual batch editor</span>
+    </div>
+    <div class="toolbar">
+      <button id="newProject">New project</button>
+      <label class="button">Import files<input id="fileInput" type="file" multiple accept=".bat,.cmd,.sys,.txt"></label>
+      <button id="exportProject">Export project</button>
+      <button id="exportBat">Export current BAT</button>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <aside class="sidebar left">
+      <section>
+        <h2>Project files</h2>
+        <div id="fileList" class="file-list"></div>
+      </section>
+      <section class="simulation-panel">
+        <h2>Simulation</h2>
+        <div id="simulationInputs" class="simulation-inputs"></div>
+        <div class="simulation-actions">
+          <div class="button-row">
+            <button id="traceToggle" class="toggle-button" type="button" aria-pressed="true">Trace: On</button>
+          </div>
+          <div id="traceSummary" class="trace-summary"></div>
+        </div>
+      </section>
+      <section>
+        <h2>Labels</h2>
+        <div id="labelList" class="label-list"></div>
+      </section>
+    </aside>
+
+    <section class="editor-pane">
+      <div class="tabs">
+        <button data-view="diagram" class="active">Diagram</button>
+        <button data-view="source">Source</button>
+        <button data-view="split">Split</button>
+        <button data-view="trace">Execution trace</button>
+        <span id="statusText"></span>
+      </div>
+      <div id="diagramView" class="diagram"></div>
+      <textarea id="sourceView" class="source hidden" spellcheck="false"></textarea>
+      <div id="traceView" class="trace-view hidden"></div>
+    </section>
+
+    <aside class="sidebar right">
+      <section>
+        <h2>Inspector</h2>
+        <div id="inspector" class="inspector empty">Select a block.</div>
+      </section>
+      <section>
+        <h2>Validation</h2>
+        <div id="validation"></div>
+      </section>
+
+    </aside>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

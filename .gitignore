@@ -1,0 +1,11 @@
+# Private local test material. Never commit or publish this directory.
+docs/private/
+
+# Detailed local test output. CI logs are retained by the CI service.
+.agent/test-results/
+
+# Dependency and generated test output.
+node_modules/
+coverage/
+playwright-report/
+test-results/

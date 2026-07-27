@@ -1,0 +1,15 @@
+{
+  "name": "batflow",
+  "version": "0.5.0",
+  "private": true,
+  "description": "A client-side visual editor and control-flow simulator for MS-DOS 7.1 batch files.",
+  "scripts": {
+    "check:syntax": "node --check public/app.js",
+    "test": "node --test tests/*.test.js",
+    "check": "npm run check:syntax && npm test",
+    "smoke": "node scripts/http-smoke.mjs"
+  },
+  "engines": {
+    "node": ">=24 <25"
+  }
+}
