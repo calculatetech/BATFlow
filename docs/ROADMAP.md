@@ -1,6 +1,6 @@
 # BATFlow roadmap
 
-Last updated: July 26, 2026
+Last updated: July 27, 2026
 
 Current target: **stable 0.5.0**
 
@@ -52,54 +52,39 @@ The `0.5.0` milestone closes the release-blocking and high-priority gaps.
 
 ## Milestone: stable 0.5.0
 
-Status: **In progress**
+Status: **Automated stabilization complete; awaiting CI and human verification**
 
-### 1. Establish the managed project
+### Completed on the release-candidate branch
 
-- Preserve an honest initial source baseline without fabricating prior history.
-- Record `0.5.0` as the canonical product version and document the rename from
-  `passes`.
-- Separate product, exported-project, IndexedDB schema, and interpreter-profile
+- Canonical `0.5.0` product metadata, honest baseline history, rename record,
+  locked Node 24 tooling, CI, and a tag-only release workflow.
+- Independent product, project-format, IndexedDB-schema, and interpreter-profile
   versions.
-- Add reproducible development commands, locked tooling, CI, release packaging,
-  and immutable release metadata.
-- Publish only a staged web root and verify that repository-private paths are
-  unavailable.
+- Validated version-1 project import/export, explicit UTF-8 and line-ending
+  behavior, durable source identities, and visible storage errors.
+- Non-destructive legacy recovery from known `passes` and BATFlow databases.
+- Confirmation for destructive project/file replacement operations.
+- Tested parser and simulator corrections for outcome handling, stale traces,
+  command prefixes, quoted paths, target resolution, label grouping, loops,
+  conditional transfers, and interpreter exit.
+- Static analysis, unit, browser, persistence, migration, accessibility, HTTP,
+  deterministic packaging, checksum, and private-path boundary checks.
+- Compatibility, format, changelog, release, and human-test documentation.
 
-### 2. Make projects safe
+### Remaining release gate
 
-- Prevent New Project, imports, and filename collisions from silently replacing
-  saved work.
-- Validate and version project imports before changing current state.
-- Reconcile durable block identities so notes, outcomes, and navigation survive
-  structural source edits.
-- Define and test encoding and line-ending behavior.
-- Make IndexedDB failures visible, recoverable, and upgrade-safe.
-
-### 3. Stabilize parsing and simulation
-
-- Model flow-relevant outcome producers consistently.
-- Recalculate or invalidate traces after source and file changes.
-- Correct command-prefix, quoted-path, target-resolution, and label-grouping
-  behavior.
-- Distinguish completed traces from step limits and probable loops.
-- Model conditional transfers and termination as control flow.
-- Preserve supported single-file behavior while adding regression coverage.
-
-### 4. Verify and release
-
-- Turn all release-blocking and high-priority assessment findings into
-  reproducible tests and close them by a tested fix, removal of unintended
-  behavior, or explicit owner acceptance.
-- Run static, unit, browser, persistence, migration, packaging, and accessibility
-  checks in CI.
-- Verify a release candidate manually from the exact packaged artifact.
-- Create annotated tag `v0.5.0` only after the full CI suite passes and a human
-  approves that exact commit.
+- Push the release-candidate branch and obtain a green required `verify` check.
+- Test the exact packaged archive with representative owner-supplied private
+  inputs using [the human checklist](HUMAN_TESTING.md).
+- Human-review and merge the pull request.
+- With explicit owner authorization, create annotated tag `v0.5.0` from the
+  verified merge commit. The tag workflow must publish the matching archive and
+  checksum.
 
 ### 0.5.0 release gate
 
-- No open or silently deferred P0/P1 assessment findings.
+- No open or silently deferred P0/P1 assessment findings; the unavailable
+  historical `passes` artifact is an explicit compatibility limitation.
 - Canonical version, changelog, source, tag, artifact, and checksum agree.
 - A clean checkout can reproduce the tested artifact.
 - Private fixtures and generated test results are absent from Git history and
@@ -109,14 +94,13 @@ Status: **In progress**
 
 ## 0.5.x hardening
 
-After `0.5.0`, address the remaining medium- and low-priority assessment work:
+After `0.5.0`, address remaining medium- and low-priority work:
 
-- Project-scoped simulation scenarios and improved autosave behavior.
-- Clearer file-type, project-name, collision, and empty-state behavior.
-- Keyboard accessibility and responsive inspector access.
-- Structured diagnostics and user-visible save/error status.
-- Browser compatibility, asset caching, formatting, linting, and documentation
-  enforcement.
+- Project-scoped, durable simulation scenarios.
+- Project naming and richer file identity/collision controls.
+- Structured diagnostics beyond the current save/import status.
+- Broader browser compatibility, asset caching, and offline behavior.
+- Terminal-newline presentation cleanup and additional keyboard ergonomics.
 
 ## 0.6.0 and later
 
