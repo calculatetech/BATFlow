@@ -52,7 +52,7 @@ The `0.5.0` milestone closes the release-blocking and high-priority gaps.
 
 ## Milestone: stable 0.5.0
 
-Status: **Automated stabilization complete; awaiting CI and human verification**
+Status: **Release-candidate CI green; awaiting human verification**
 
 ### Completed on the release-candidate branch
 
@@ -70,10 +70,10 @@ Status: **Automated stabilization complete; awaiting CI and human verification**
 - Static analysis, unit, browser, persistence, migration, accessibility, HTTP,
   deterministic packaging, checksum, and private-path boundary checks.
 - Compatibility, format, changelog, release, and human-test documentation.
+- Draft pull request #1 is open and its required `verify` CI check passes.
 
 ### Remaining release gate
 
-- Push the release-candidate branch and obtain a green required `verify` check.
 - Test the exact packaged archive with representative owner-supplied private
   inputs using [the human checklist](HUMAN_TESTING.md).
 - Human-review and merge the pull request.

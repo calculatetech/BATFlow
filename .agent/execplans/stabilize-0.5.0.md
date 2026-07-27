@@ -41,8 +41,8 @@ release tag.
       dispositions, and roadmap.
 - [x] (2026-07-27 01:11Z) Packaged and verified a reproducible local release
       candidate under Node 24.
-- [ ] Push and open a draft release-candidate pull request; obtain green remote
-      CI.
+- [x] (2026-07-27 01:13Z) Pushed commit `c1ed8dc`, opened draft pull request
+      #1, and obtained passing push and pull-request `verify` CI runs.
 - [ ] Obtain human browser/data-migration verification and approval.
 
 ## Surprises & Discoveries
@@ -102,11 +102,11 @@ release tag.
 
 ## Outcomes & Retrospective
 
-The local release candidate now passes static checks, 25 Node tests, three
+The release candidate now passes static checks, 26 Node tests, three
 Chromium acceptance tests including an axe accessibility scan, HTTP boundary
-checks, and deterministic archive verification. The remaining work is remote
-CI plus human verification of the exact archive; no merge or release tag has
-occurred.
+checks, deterministic archive verification, and required remote CI. The
+remaining work is human verification of the exact CI archive; no merge or
+release tag has occurred.
 
 ## Context and Orientation
 
