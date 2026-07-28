@@ -43,6 +43,29 @@ remaining work.
 
 The audit does **not** count explicitly future product features as defects. Cross-file trace expansion, ZIP-based `.batflow` packages, undo/redo, drag ordering, branch exploration, generated labels, and visual CONFIG.SYS editing remain legitimate roadmap scope. Some future items still appear below where their absence compromises a feature already advertised as complete—for example, line-based identities corrupt completed manual notes after edits.
 
+## Stabilization disposition
+
+The assessment above remains the immutable baseline evidence. As of the
+`0.5.0` release-candidate branch, its release-blocking and high-priority
+findings have these dispositions:
+
+| Findings | Disposition |
+| --- | --- |
+| RM-01, RM-02, RM-04, RM-06, RM-07 | Closed by the approved baseline, canonical version sources, separated version domains, locked Node 24 toolchain, tests, and required CI. |
+| RM-03 | Closed with documented best-effort, non-destructive migration from known `passes` names. The unavailable historical artifact remains an explicit compatibility limitation, not a silent claim. |
+| RM-05, OP-03 | Implemented by runtime-only deterministic packaging, checksums, staged-root smoke checks, and a tag/version-gated release workflow. Awaiting the human release gate before use. |
+| RM-09, DOC-01, DOC-02 | Closed by the priority roadmap, corrected deployment/development instructions, and reconciled release documentation. |
+| OP-01, OP-02 | Closed by serving only the runtime root and removing the broken in-application roadmap. |
+| DI-01 through DI-05 | Closed for the documented 0.5.0 boundary by confirmation gates, durable identities, explicit UTF-8/line-ending handling, a validated versioned format, and transaction-aware stable storage. |
+| FC-01 through FC-07 | Closed by pure parser/simulator modules and named unit/browser regressions for outcomes, stale traces, prefixes, quoting, target intent, limits, conditional flow, and EXIT. |
+| QA-01 | Closed by extracting browser-independent core modules with deterministic tests. |
+
+Medium- and low-priority findings are either addressed opportunistically in
+the release candidate or retained under `0.5.x` in the
+[roadmap](ROADMAP.md). Automated completion does not constitute release
+approval: the branch still requires green remote CI and the
+[human packaged-artifact checklist](HUMAN_TESTING.md).
+
 ## Method and evidence
 
 The audit used static inspection, Git inspection, syntax checking, HTTP smoke tests, a headless Firefox load, and read-only Node probes against the parser and simulator.

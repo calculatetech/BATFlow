@@ -1,0 +1,9 @@
+.agent/test-results/
+.agent/PLANS.md
+coverage/
+dist/
+node_modules/
+playwright-report/
+test-results/
+package-lock.json
+docs/PROJECT_ASSESSMENT.md

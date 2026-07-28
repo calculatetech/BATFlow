@@ -3,8 +3,8 @@
 BATFlow is a static, client-side visual editor and control-flow simulator for
 Win98 MS-DOS 7.1 batch files.
 
-The project is currently stabilizing its first managed release, `0.5.0`.
-BATFlow was formerly called `passes`.
+The first managed release candidate is `0.5.0`. BATFlow was formerly called
+`passes`.
 
 ## Run locally
 
@@ -18,6 +18,23 @@ Open `http://localhost:8080`.
 
 Only `public/` is a deployable web root. Do not serve the repository root.
 
+## Develop and verify
+
+Node.js 24 is required. From a clean checkout:
+
+```sh
+npm ci
+npx playwright install chromium
+npm run check
+npm run test:e2e
+npm run package
+npm run verify:package
+npm run verify:reproducible
+```
+
+Generated archives, checksums, browser traces, and detailed results are written
+under ignored `.agent/test-results/`. `dist/` is also generated and ignored.
+
 ## Current capabilities
 
 - Browser-local IndexedDB project persistence
@@ -29,11 +46,13 @@ Only `public/` is a deployable web root. Do not serve the repository root.
 - Variable, path-existence, and flow-relevant ERRORLEVEL simulation inputs
 - Single-file control-flow traces with dynamic GOTO support
 - Block editing, duplication, deletion, and manual notes
-- JSON project export and individual file export
+- `.batflow` project export and individual file export
 
-The current implementation is a prototype and is not yet a lossless editor.
-Review the [roadmap](docs/ROADMAP.md) for release status and the
-[project assessment](docs/PROJECT_ASSESSMENT.md) for detailed findings.
+The supported text boundary is UTF-8 with CRLF, LF, or CR line endings; BATFlow
+does not guess legacy DOS code pages. Review the
+[compatibility boundary](docs/COMPATIBILITY.md), [project format](docs/PROJECT_FORMAT.md),
+[roadmap](docs/ROADMAP.md), and baseline
+[project assessment](docs/PROJECT_ASSESSMENT.md).
 
 ## Development policy
 
