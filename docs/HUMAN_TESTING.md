@@ -44,6 +44,20 @@ probe output belong under ignored `.agent/test-results/`, not in commits.
 - Reload after the visible `Saved` state and confirm work persists.
 - Cancel New Project and a same-name file replacement; confirm current work
   remains. Then approve each operation and confirm it behaves as described.
+- Name a project, reload after Saved, and confirm the name and `.batflow`
+  download filename persist. Confirm New Project can be canceled before any
+  state changes.
+- Import a nested source folder once with its selected root stripped and once
+  with it retained. Confirm unsupported files are summarized and skipped.
+- Exercise Replace, Keep both, Skip, and cancel for case-insensitive and
+  separator-equivalent collisions. Confirm cancel leaves the complete project
+  untouched.
+- Import a safe non-8.3 path and confirm it remains unchanged with a visible
+  warning. Confirm manually entered rename paths enforce DOS 8.3 components.
+- Rename a file into a relative directory and confirm notes, simulation
+  outcomes, and entry designation remain attached. Replace it and confirm
+  source-attached state clears. Delete the entry and confirm fallback prefers
+  root AUTOEXEC.BAT.
 - Export the `.batflow` project, create a new project, reimport the export, and
   compare source, notes, file list, and line endings.
 - Confirm an invalid or future-version project reports an error without

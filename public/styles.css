@@ -29,6 +29,16 @@ textarea,
 select {
   font: inherit;
 }
+input,
+textarea,
+select {
+  max-width: 100%;
+  background: #0f131a;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 6px 8px;
+}
 button,
 .button {
   background: var(--panel2);
@@ -108,6 +118,35 @@ h2 {
 .file-item {
   width: 100%;
   text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.file-item span:first-child {
+  min-width: 0;
+  flex: 1;
+}
+.file-badge,
+.file-warning {
+  flex: none;
+  border-radius: 999px;
+  padding: 1px 5px;
+  font-size: 10px;
+  font-weight: 700;
+}
+.file-badge {
+  color: var(--success);
+  border: 1px solid var(--success);
+}
+.file-warning {
+  color: var(--warning);
+  border: 1px solid var(--warning);
+}
+.file-actions {
+  margin-top: 8px;
+}
+#projectName {
+  width: 100%;
 }
 .file-item.active {
   border-color: var(--accent);
@@ -175,6 +214,73 @@ h2 {
 }
 .hidden {
   display: none !important;
+}
+dialog {
+  width: min(520px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px;
+}
+dialog::backdrop {
+  background: rgb(0 0 0 / 70%);
+}
+dialog form {
+  display: grid;
+  gap: 12px;
+}
+dialog h2 {
+  margin: 0;
+}
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.dialog-warning {
+  min-height: 1.4em;
+  margin: 0;
+  color: var(--danger);
+}
+.import-dialog {
+  width: min(760px, calc(100vw - 32px));
+}
+#folderRootChoice {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--border);
+}
+#folderRootChoice label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.import-summary {
+  color: var(--muted);
+}
+.import-preview {
+  display: grid;
+  gap: 8px;
+}
+.import-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(120px, auto);
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.import-row-warning {
+  grid-column: 1 / -1;
+  color: var(--warning);
+  font-size: 12px;
+}
+.keep-path {
+  grid-column: 1 / -1;
+  width: 100%;
 }
 .section-group {
   position: relative;

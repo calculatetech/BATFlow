@@ -679,6 +679,7 @@ export function parseBatch(text, path, options = {}) {
 
   return {
     path,
+    fileId: options.fileId || null,
     text,
     lines,
     lineIds,
