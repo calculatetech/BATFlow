@@ -45,6 +45,13 @@ The audit does **not** count explicitly future product features as defects. Cros
 
 ## Stabilization disposition
 
+Owner policy update, July 28, 2026: the managed `0.5.0` foundation was approved,
+CI-verified, and merged, but it is a development baseline rather than a formal
+release. Pre-1.0 work advances through structured `0.x` versions without Git
+tags or GitHub releases. The original tag and release recommendations below
+remain part of this dated audit; the [roadmap](ROADMAP.md) is the current
+delivery policy.
+
 The assessment above remains the immutable baseline evidence. As of the
 `0.5.0` release-candidate branch, its release-blocking and high-priority
 findings have these dispositions:
@@ -53,18 +60,17 @@ findings have these dispositions:
 | --- | --- |
 | RM-01, RM-02, RM-04, RM-06, RM-07 | Closed by the approved baseline, canonical version sources, separated version domains, locked Node 24 toolchain, tests, and required CI. |
 | RM-03 | Closed with documented best-effort, non-destructive migration from known `passes` names. The unavailable historical artifact remains an explicit compatibility limitation, not a silent claim. |
-| RM-05, OP-03 | Implemented by runtime-only deterministic packaging, checksums, staged-root smoke checks, and a tag/version-gated release workflow. Awaiting the human release gate before use. |
+| RM-05, OP-03 | Closed for development by runtime-only deterministic packaging, checksums, and staged-root smoke checks. Formal publishing automation is deferred until `1.0.0`. |
 | RM-09, DOC-01, DOC-02 | Closed by the priority roadmap, corrected deployment/development instructions, and reconciled release documentation. |
 | OP-01, OP-02 | Closed by serving only the runtime root and removing the broken in-application roadmap. |
 | DI-01 through DI-05 | Closed for the documented 0.5.0 boundary by confirmation gates, durable identities, explicit UTF-8/line-ending handling, a validated versioned format, and transaction-aware stable storage. |
 | FC-01 through FC-07 | Closed by pure parser/simulator modules and named unit/browser regressions for outcomes, stale traces, prefixes, quoting, target intent, limits, conditional flow, and EXIT. |
 | QA-01 | Closed by extracting browser-independent core modules with deterministic tests. |
 
-Medium- and low-priority findings are either addressed opportunistically in
-the release candidate or retained under `0.5.x` in the
-[roadmap](ROADMAP.md). Automated completion does not constitute release
-approval: the branch still requires green remote CI and the
-[human packaged-artifact checklist](HUMAN_TESTING.md).
+Medium- and low-priority findings are either addressed in the merged foundation
+or retained under `0.5.x` in the [roadmap](ROADMAP.md). Automated completion
+does not constitute approval: every implementation still requires human review
+of the uncommitted working tree followed by green remote CI.
 
 ## Method and evidence
 

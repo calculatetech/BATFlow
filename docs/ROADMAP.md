@@ -2,12 +2,12 @@
 
 Last updated: July 28, 2026
 
-Current target: **stable 0.5.0**
+Current baseline: **0.5.0 development**
 
 BATFlow, formerly called `passes`, is being converted from an unversioned
-prototype into a managed, tested release. The detailed audit is preserved in
-the [project assessment](PROJECT_ASSESSMENT.md); this roadmap is the
-human-facing record of completed foundations and remaining priorities.
+prototype into a managed and genuinely usable application. The detailed audit
+is preserved in the [project assessment](PROJECT_ASSESSMENT.md); this roadmap
+is the human-facing record of completed foundations and remaining priorities.
 
 ## Product boundary
 
@@ -19,107 +19,74 @@ human-facing record of completed foundations and remaining priorities.
   shipped with the application.
 - The roadmap is repository documentation, not an in-application feature.
 
-## Delivery policy
+## Delivery and version policy
 
 - All work is performed in a branch or dedicated worktree.
-- No change reaches `main` until CI succeeds and a human verifies it.
-- The empty repository is bootstrapped once from a CI-verified branch; after
-  that promotion, all changes use reviewed pull requests.
-- Test code and clearly synthetic fixtures are tracked. Private fixtures live
-  under ignored `docs/private/`.
-- Detailed local test output lives under ignored `.agent/test-results/`.
-  Generated results never receive follow-up commits.
-- Roadmap status changes are included with the behavioral change they describe.
-- Release tags are immutable and identify the exact human-verified, CI-green
-  commit.
+- The project owner verifies the uncommitted working tree before it is
+  committed.
+- After approval, the exact reviewed tree is committed and pushed. It reaches
+  `main` only after required CI succeeds and the pull request is merged.
+- CI-generated bundles validate packaging and reproducibility; they are not
+  substitutes for human testing.
+- Private fixtures live under ignored `docs/private/`. Detailed local results
+  live under ignored `.agent/test-results/`; neither is committed.
+- Roadmap status changes accompany the work they describe.
+- Managed development advances through SemVer-compatible `0.x` versions.
+  Formal Git tags and GitHub releases begin at `1.0.0`.
+- Project-format, IndexedDB-schema, and interpreter-profile versions remain
+  independent from the product version.
 
-## Completed foundation
+## Completed: managed 0.5.0 foundation
 
-The prototype currently provides:
+Status: **Human-approved, CI-verified, and merged in pull request #1**
 
-- A static browser application with local project persistence.
-- Multi-file import and individual file/project export.
-- Diagram, source, split, and execution-trace views.
-- Parsing and visualization for labels, conditions, jumps, calls, variables,
-  pipelines, comments, known commands, and external commands.
-- Basic COMMAND.COM syntax validation and CONFIG.SYS menu awareness.
-- Simulation inputs for variables, paths, and selected ERRORLEVEL outcomes.
-- Single-file trace navigation, label navigation, and called-file links.
-- Block source editing, duplication, deletion, notes, and REN/RENAME inspection.
-
-These capabilities establish product direction but are not all release-verified.
-The `0.5.0` milestone closes the release-blocking and high-priority gaps.
-
-## Milestone: stable 0.5.0
-
-Status: **Candidate 4 human-approved; awaiting final CI and merge**
-
-### Completed on the release-candidate branch
-
-- Canonical `0.5.0` product metadata, honest baseline history, rename record,
-  locked Node 24 tooling, CI, and a tag-only release workflow.
-- Independent product, project-format, IndexedDB-schema, and interpreter-profile
+- Established honest Git provenance, canonical product metadata, a locked Node
+  24 toolchain, required CI, and deterministic deployment-bundle validation.
+- Separated product, project-format, IndexedDB-schema, and interpreter-profile
   versions.
-- Validated version-1 project import/export, explicit UTF-8 and line-ending
-  behavior, durable source identities, and visible storage errors.
-- Non-destructive legacy recovery from known `passes` and BATFlow databases.
-- Confirmation for destructive project/file replacement operations.
-- Tested parser and simulator corrections for outcome handling, stale traces,
-  command prefixes, quoted paths, target resolution, label grouping, loops,
-  conditional transfers, and interpreter exit.
-- Static analysis, unit, browser, persistence, migration, accessibility, HTTP,
-  deterministic packaging, checksum, and private-path boundary checks.
-- Compatibility, format, changelog, release, and human-test documentation.
-- Draft pull request #1 is open and its required `verify` CI check passes.
-- Candidate 4 restores CONFIG.SYS-driven choices and DOS `%config%` evaluation,
-  synchronizes Split-view source selection, omits blank diagram blocks, exports
-  the canonical `.batflow` filename, and uses a coherent cache revision.
-- The project owner approved the uncommitted local candidate on July 28, 2026,
-  before its final commit as required by the revised review policy.
+- Added validated project import/export, explicit UTF-8 and line-ending
+  behavior, durable source identities, visible storage failures, and
+  non-destructive recovery from known legacy database names.
+- Added confirmation for destructive project and file replacement operations.
+- Corrected outcome handling, stale traces, command prefixes, quoted paths,
+  target resolution, label grouping, loops, conditional transfers, interpreter
+  exit, CONFIG.SYS choices, Split-view selection, blank blocks, caching, and
+  `.batflow` downloads.
+- Added static, unit, browser, persistence, migration, accessibility, HTTP,
+  packaging, checksum, reproducibility, and private-path boundary checks.
+- Recorded the compatibility boundary, project format, baseline assessment,
+  changelog, and human-verification process.
 
-### Remaining release gate
+This foundation makes changes manageable and testable. It is not a declaration
+that BATFlow is stable, complete, or ready for formal release.
 
-- Commit and push the exact approved working tree without behavioral changes.
-- Obtain green required CI for that commit, then merge the pull request.
-- With explicit owner authorization, create annotated tag `v0.5.0` from the
-  verified merge commit. The tag workflow must publish the matching archive and
-  checksum.
-
-### 0.5.0 release gate
-
-- No open or silently deferred P0/P1 assessment findings; the unavailable
-  historical `passes` artifact is an explicit compatibility limitation.
-- Canonical version, changelog, source, tag, artifact, and checksum agree.
-- A clean checkout can reproduce the tested artifact.
-- Private fixtures and generated test results are absent from Git history and
-  the release artifact.
-- README commands and links pass automated checks.
-- Human verification and required CI checks are recorded for the tagged commit.
-
-## 0.5.x hardening
-
-After `0.5.0`, address remaining medium- and low-priority work:
+## Priority 1: 0.5.x usability hardening
 
 - Project-scoped, durable simulation scenarios.
-- Project naming and richer file identity/collision controls.
-- Structured diagnostics beyond the current save/import status.
-- Broader browser compatibility, asset caching, and offline behavior.
+- Project naming and richer file identity and collision controls.
+- Structured diagnostics beyond the current save and import status.
+- Broader browser compatibility, cache behavior, and offline behavior.
 - Terminal-newline presentation cleanup and additional keyboard ergonomics.
 
-## 0.6.0 and later
+Compatible fixes and hardening advance the patch version. The exact target is
+set when each implementation scope is accepted.
 
-Once the managed foundation is stable, resume product expansion:
+## Priority 2: 0.6.x and later capabilities
 
 - Cross-file CALL and direct-transfer execution traces.
 - ZIP-based `.batflow` containers with nested paths.
 - Undo/redo, generated-source diff, and durable edit history.
 - Saved scenarios, assertions, and branch exploration.
 - Explicit label operations, drag ordering, and command insertion.
-- Limited visual CONFIG.SYS editing and additional verified interpreter features.
+- Limited visual CONFIG.SYS editing and additional verified interpreter
+  features.
+
+New user-facing capability milestones advance the minor version.
 
 ## Toward 1.0.0
 
-`1.0.0` represents a deliberate compatibility and data-fidelity commitment,
-not completion of an internal pass number. It requires stable project/storage
-migrations, documented interpreter behavior, lossless supported-file handling,
-and a sustained CI/release process.
+`1.0.0` is the first formally tagged and published release. It represents a
+deliberate compatibility and data-fidelity commitment, including stable
+project/storage migrations, documented interpreter behavior, lossless
+supported-file handling, sustained CI, and successful human verification of a
+usable application.

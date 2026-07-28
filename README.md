@@ -3,8 +3,9 @@
 BATFlow is a static, client-side visual editor and control-flow simulator for
 Win98 MS-DOS 7.1 batch files.
 
-The first managed release candidate is `0.5.0`. BATFlow was formerly called
-`passes`.
+The current managed development baseline is `0.5.0`. BATFlow was formerly
+called `passes`. Pre-1.0 development uses structured `0.x` versions without
+formal Git tags or GitHub releases.
 
 ## Run locally
 
@@ -58,6 +59,9 @@ does not guess legacy DOS code pages. Review the
 
 All changes are developed in branches or worktrees. Nothing is merged until
 the relevant CI checks pass and a human verifies the result.
+
+Human review is performed against the uncommitted worktree before the reviewed
+tree is committed. CI artifacts are not a substitute for that review.
 
 Private test inputs belong in the ignored `docs/private/` directory. Tracked
 tests use deliberately synthetic fixtures under `tests/fixtures/synthetic/`.

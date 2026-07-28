@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -11,10 +11,10 @@ const read = (path) => readFileSync(join(root, path), "utf8");
 test("the managed product version is consistently declared", () => {
   const manifest = JSON.parse(read("package.json"));
   assert.equal(manifest.version, "0.5.0");
-  assert.match(read("README.md"), /release candidate is `0\.5\.0`/);
+  assert.match(read("README.md"), /development baseline is `0\.5\.0`/);
   assert.match(
     read("docs/ROADMAP.md"),
-    /Current target: \*\*stable 0\.5\.0\*\*/,
+    /Current baseline: \*\*0\.5\.0 development\*\*/,
   );
 });
 
@@ -69,15 +69,15 @@ test("the public UI has no private example loader or in-app roadmap", () => {
 
 test("the public HTML references only present runtime assets", () => {
   const html = read("public/index.html");
-  assert.match(html, /href="styles\.css\?v=0\.5\.0-rc4"/);
-  assert.match(html, /src="app\.js\?v=0\.5\.0-rc4"/);
+  assert.match(html, /href="styles\.css\?v=0\.5\.0-dev"/);
+  assert.match(html, /src="app\.js\?v=0\.5\.0-dev"/);
   for (const module of [
     "public/app.js",
     "public/lib/project-format.js",
     "public/lib/simulation.js",
     "public/lib/storage.js",
   ]) {
-    assert.match(read(module), /\.js\?v=0\.5\.0-rc4/);
+    assert.match(read(module), /\.js\?v=0\.5\.0-dev/);
   }
   assert.doesNotThrow(() => read("public/styles.css"));
   assert.doesNotThrow(() => read("public/app.js"));
@@ -91,8 +91,19 @@ test("the human-facing roadmap records the delivery and result policies", () => 
   );
   assert.match(
     roadmap,
-    /No change reaches `main` until CI succeeds and a human verifies it/,
+    /reaches\s+`main` only after required CI succeeds and the pull request is merged/,
   );
   assert.match(roadmap, /\.agent\/test-results\//);
-  assert.match(roadmap, /annotated tag `v0\.5\.0`/);
+  assert.match(
+    roadmap,
+    /Formal Git tags and GitHub releases begin at `1\.0\.0`/,
+  );
+});
+
+test("pre-1.0 CI validates builds without publishing review artifacts", () => {
+  const ci = read(".github/workflows/ci.yml");
+  assert.equal(existsSync(join(root, ".github/workflows/release.yml")), false);
+  assert.doesNotMatch(ci, /upload-artifact|release candidate/i);
+  assert.match(ci, /npm run verify:reproducible/);
+  assert.match(ci, /BATFLOW_WEB_ROOT=dist/);
 });
