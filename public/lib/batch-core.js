@@ -597,10 +597,10 @@ export function parseBatch(text, path, options = {}) {
       title = "Set variable";
       const match = commandText.match(/^set\s+([^=\s]+)=(.*)$/i);
       if (match) data = { name: match[1], value: match[2] };
-    } else if (/^goto\s+/i.test(commandText)) {
+    } else if (/^goto(?:\s|$)/i.test(commandText)) {
       kind = "goto";
       title = "Jump";
-      data.target = commandText.replace(/^goto\s+/i, "").trim();
+      data.target = commandText.replace(/^goto(?:\s+|$)/i, "").trim();
     } else if (/^call\s+/i.test(commandText)) {
       kind = "call";
       title = "Call batch";

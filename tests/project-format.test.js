@@ -64,6 +64,47 @@ test("simulation scenarios normalize and round-trip with the project", () => {
   );
 });
 
+test("an explicitly unset CONFIG survives project round-trip", () => {
+  const updated = updateProjectSimulationScenario(createProject(), {
+    variables: { config: "", empty: "" },
+    paths: {},
+    outcomes: {},
+  });
+
+  assert.deepEqual(updated.metadata.simulationScenario.variables, {
+    config: "",
+  });
+  const imported = importProjectDocument(JSON.parse(serializeProject(updated)));
+  assert.equal(
+    Object.hasOwn(
+      imported.project.metadata.simulationScenario.variables,
+      "config",
+    ),
+    true,
+  );
+  assert.equal(
+    imported.project.metadata.simulationScenario.variables.config,
+    "",
+  );
+});
+
+test("scenario maps preserve hostile but valid DOS names", () => {
+  const variables = JSON.parse('{"__proto__":"VALUE"}');
+  const outcomes = JSON.parse('{"__proto__":7}');
+  const updated = updateProjectSimulationScenario(createProject(), {
+    variables,
+    paths: {},
+    outcomes,
+  });
+  const roundTrip = importProjectDocument(JSON.parse(serializeProject(updated)))
+    .project.metadata.simulationScenario;
+
+  assert.equal(Object.hasOwn(roundTrip.variables, "__proto__"), true);
+  assert.equal(roundTrip.variables.__proto__, "VALUE");
+  assert.equal(Object.hasOwn(roundTrip.outcomes, "__proto__"), true);
+  assert.equal(roundTrip.outcomes.__proto__, 7);
+});
+
 test("missing scenarios default safely and malformed scenarios are rejected", () => {
   const imported = importProjectDocument({
     formatVersion: PROJECT_FORMAT_VERSION,
@@ -105,7 +146,16 @@ test("missing scenarios default safely and malformed scenarios are rejected", ()
         paths: {},
         outcomes: { choice: -1 },
       }),
-    /Simulation outcomes/,
+    /0 through 255/,
+  );
+  assert.throws(
+    () =>
+      updateProjectSimulationScenario(createProject(), {
+        variables: {},
+        paths: {},
+        outcomes: { choice: 256 },
+      }),
+    /0 through 255/,
   );
   assert.throws(
     () =>
@@ -124,6 +174,25 @@ test("missing scenarios default safely and malformed scenarios are rejected", ()
       }),
     /Simulation variables/,
   );
+});
+
+test("imports recover projects by clearing previously accepted oversized outcomes", () => {
+  const project = updateProjectSimulationScenario(createProject("Recovery"), {
+    variables: { mode: "SAFE" },
+    paths: {},
+    outcomes: { valid: 2 },
+  });
+  const document = JSON.parse(serializeProject(project));
+  document.project.metadata.simulationScenario.outcomes.oversized = 1e31;
+
+  const imported = importProjectDocument(document);
+
+  assert.equal(imported.discardedSimulationOutcomes, 1);
+  assert.deepEqual(imported.project.metadata.simulationScenario, {
+    variables: { mode: "SAFE" },
+    paths: {},
+    outcomes: { valid: 2 },
+  });
 });
 
 test("legacy projects migrate and future project formats are rejected", () => {

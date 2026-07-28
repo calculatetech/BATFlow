@@ -164,6 +164,65 @@ test("CHOICE exposes and consumes a flow-relevant ERRORLEVEL outcome", () => {
   });
   assert.equal(result.status, "exited");
   assert.ok(result.trace.some((row) => row.result === "Entered :no"));
+  assert.ok(
+    result.trace.some((row) => row.result === "TRUE · ERRORLEVEL 2 >= 2"),
+  );
+
+  const outOfRange = simulate(parsed, {
+    outcomes: { [requests[0].key]: 256 },
+  });
+  assert.equal(outOfRange.status, "input-required");
+});
+
+test("outcome identities are scoped by file and producing command", () => {
+  const choiceSource = [
+    "choice Continue",
+    "if errorlevel 2 goto no",
+    ":no",
+    "exit",
+  ].join("\r\n");
+  const externalSource = [
+    "danger.exe",
+    "if errorlevel 2 goto no",
+    ":no",
+    "exit",
+  ].join("\r\n");
+  const mainRequest = collectOutcomeRequests(
+    parse(choiceSource, "MAIN.BAT"),
+  )[0];
+  const otherFileRequest = collectOutcomeRequests(
+    parse(choiceSource, "OTHER.BAT"),
+  )[0];
+  const slashVariantRequest = collectOutcomeRequests(
+    parse(choiceSource, "DIR/MAIN.BAT"),
+  )[0];
+  const backslashVariantRequest = collectOutcomeRequests(
+    parse(choiceSource, "DIR\\MAIN.BAT"),
+  )[0];
+  const changedCommandRequest = collectOutcomeRequests(
+    parse(externalSource, "MAIN.BAT"),
+  )[0];
+  const caseChangedArgumentRequest = collectOutcomeRequests(
+    parse(
+      ["danger.exe /Mode=Alpha", "if errorlevel 2 goto no", ":no", "exit"].join(
+        "\r\n",
+      ),
+      "MAIN.BAT",
+    ),
+  )[0];
+  const lowerCaseArgumentRequest = collectOutcomeRequests(
+    parse(
+      ["danger.exe /Mode=alpha", "if errorlevel 2 goto no", ":no", "exit"].join(
+        "\r\n",
+      ),
+      "MAIN.BAT",
+    ),
+  )[0];
+
+  assert.notEqual(mainRequest.key, otherFileRequest.key);
+  assert.notEqual(slashVariantRequest.key, backslashVariantRequest.key);
+  assert.notEqual(mainRequest.key, changedCommandRequest.key);
+  assert.notEqual(caseChangedArgumentRequest.key, lowerCaseArgumentRequest.key);
 });
 
 test("conditional transfers and EXIT are modeled as control flow", () => {
@@ -242,4 +301,66 @@ test("CONFIG.SYS selections compare using DOS config-value casing", () => {
     .map((row) => row.result);
   assert.deepEqual(conditions, ["FALSE", "TRUE"]);
   assert.ok(result.trace.some((row) => row.result === "Entered :normal"));
+});
+
+test("an explicitly unset CONFIG evaluates empty and execution continues", () => {
+  const parsed = parse(
+    'if "%config%"=="NORMAL" echo normal\r\nexit',
+    "AUTOEXEC.BAT",
+  );
+  const result = simulate(parsed, {
+    variables: { config: "" },
+  });
+
+  assert.equal(result.status, "exited");
+  assert.ok(
+    result.trace.some(
+      (row) => row.event === "condition" && row.result === "FALSE",
+    ),
+  );
+});
+
+test("an empty dynamic GOTO terminates the batch as a runtime error", () => {
+  const parsed = parse("goto %config%\r\necho unreachable", "AUTOEXEC.BAT");
+  const result = simulate(parsed, {
+    variables: { config: "" },
+  });
+
+  assert.equal(result.status, "terminated");
+  assert.equal(result.stop, "Batch terminated: GOTO label missing");
+  assert.ok(
+    result.trace.some(
+      (row) => row.result === "Required GOTO label missing; batch terminated",
+    ),
+  );
+  assert.equal(
+    result.trace.some((row) => row.text === "echo unreachable"),
+    false,
+  );
+});
+
+test("a literal GOTO without a label terminates direct and conditional flow", () => {
+  const direct = simulate(parse("goto\r\necho unreachable"));
+  assert.equal(direct.status, "terminated");
+  assert.equal(direct.stop, "Batch terminated: GOTO label missing");
+  assert.equal(
+    direct.trace.some((row) => row.text === "echo unreachable"),
+    false,
+  );
+
+  const conditional = simulate(parse('if "x"=="x" goto\r\necho unreachable'));
+  assert.equal(conditional.status, "terminated");
+  assert.equal(conditional.stop, "Batch terminated: GOTO label missing");
+  assert.equal(
+    conditional.trace.some((row) => row.text === "echo unreachable"),
+    false,
+  );
+});
+
+test("a dynamic GOTO without an input remains distinguishable", () => {
+  const parsed = parse("goto %config%\r\necho unreachable", "AUTOEXEC.BAT");
+  const result = simulate(parsed);
+
+  assert.equal(result.status, "input-required");
+  assert.equal(result.stop, "Input required for GOTO %config%");
 });

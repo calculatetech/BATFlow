@@ -13,6 +13,7 @@ import {
 import {
   addTextFile,
   createProject,
+  exportProjectDocument,
   updateProjectSimulationScenario,
 } from "../public/lib/project-format.js";
 
@@ -60,6 +61,38 @@ test("current projects are stored in the stable database as versioned documents"
     (await indexedDB.databases()).some((item) => item.name === DATABASE_NAME),
     true,
   );
+});
+
+test("oversized stored outcomes are cleared without losing the project", async () => {
+  const indexedDB = new IDBFactory();
+  let project = addTextFile(
+    createProject("Recoverable"),
+    "MAIN.BAT",
+    "choice Continue",
+  );
+  project = updateProjectSimulationScenario(project, {
+    variables: { mode: "SAFE" },
+    paths: {},
+    outcomes: { choice: 2 },
+  });
+  const stored = exportProjectDocument(project);
+  stored.project.metadata.simulationScenario.outcomes.choice = 1e31;
+  await putRaw(indexedDB, DATABASE_NAME, stored);
+
+  const recovered = await loadCurrentProject({ indexedDB });
+  assert.equal(recovered.project.name, "Recoverable");
+  assert.equal(recovered.project.files["MAIN.BAT"].content, "choice Continue");
+  assert.deepEqual(recovered.project.metadata.simulationScenario, {
+    variables: { mode: "SAFE" },
+    paths: {},
+    outcomes: {},
+  });
+  assert.equal(recovered.discardedSimulationOutcomes, 1);
+  assert.equal(recovered.repairPersisted, true);
+
+  const reloaded = await loadCurrentProject({ indexedDB });
+  assert.equal(reloaded.discardedSimulationOutcomes, 0);
+  assert.equal(reloaded.project.files["MAIN.BAT"].content, "choice Continue");
 });
 
 for (const legacyName of LEGACY_DATABASE_NAMES) {

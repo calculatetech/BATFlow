@@ -17,7 +17,24 @@ and interpreter-profile versions are managed separately.
 
 - Simulation input edits now participate in the visible autosave lifecycle.
 - CONFIG.SYS defaults remain derived until the user interacts with simulation
-  inputs.
+  inputs. Explicitly clearing `%config%` suppresses `MENUDEFAULT`; Reset inputs
+  restores derivation.
+
+### Fixed
+
+- Stored ERRORLEVEL outcomes are scoped to the producing command and project
+  file instead of following unrelated replacement lines or colliding across
+  files.
+- Invalid ERRORLEVEL inputs report a visible validation error without leaving a
+  stale trace, are constrained to the DOS `0`–`255` range, and show the
+  greater-than-or-equal comparison in execution traces.
+- Dynamic GOTO traces distinguish missing simulation input from COMMAND.COM
+  termination caused by an empty or nonexistent label.
+- Projects containing outcomes accepted before that range was enforced recover
+  by clearing only those invalid outcomes instead of failing the entire load.
+- Hostile but valid DOS map keys survive project round-trips.
+- A completed older save can no longer report `Saved` while newer changes are
+  still waiting to be persisted.
 
 ## 0.5.0 — development baseline
 

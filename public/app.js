@@ -21,6 +21,7 @@ import {
   loadCurrentProject,
   saveCurrentProject,
 } from "./lib/storage.js?v=0.5.1-dev";
+import { createSaveQueue } from "./lib/save-queue.js?v=0.5.1-dev";
 import {
   collectOutcomeRequests,
   simulate,
@@ -36,8 +37,6 @@ const state = {
   trace: [],
   traceStop: "",
   traceEnabled: true,
-  saveTimer: null,
-  saveChain: Promise.resolve(),
   message: "",
   messageKind: "",
 };
@@ -67,6 +66,11 @@ function setMessage(message, kind = "") {
   element.textContent = message;
   element.className = `app-message ${kind}`.trim();
 }
+
+const projectSaveQueue = createSaveQueue({
+  save: saveCurrentProject,
+  onStatus: setMessage,
+});
 
 function projectHasWork() {
   return Object.keys(state.project.files).length > 0;
@@ -120,21 +124,7 @@ function parseCurrent() {
 }
 
 function queueSave({ immediate = false } = {}) {
-  clearTimeout(state.saveTimer);
-  const persist = () => {
-    const snapshot = state.project;
-    setMessage("Saving…");
-    state.saveChain = state.saveChain
-      .catch(() => undefined)
-      .then(() => saveCurrentProject(snapshot))
-      .then(() => setMessage("Saved", "success"))
-      .catch((error) => setMessage(`Save failed: ${error.message}`, "error"));
-    return state.saveChain;
-  };
-  if (immediate) return persist();
-  state.saveTimer = setTimeout(persist, 350);
-  setMessage("Unsaved changes");
-  return state.saveChain;
+  return projectSaveQueue.queue(state.project, { immediate });
 }
 
 function recalculateTrace() {
@@ -443,16 +433,23 @@ function renderSimulationInputs() {
     return;
   }
   const scenario = currentSimulationScenario();
+  const configDefault = state.parsed.configInfo?.menuDefault;
   const variables = state.parsed.variables
     .map((item) => {
       const key = norm(item.name);
-      const saved = scenario.variables[key] || "";
+      const explicit = Object.hasOwn(storedSimulationScenario().variables, key);
+      const derived = key === "config" && !explicit && Boolean(configDefault);
+      const saved = Object.hasOwn(scenario.variables, key)
+        ? scenario.variables[key]
+        : "";
       if (item.values.length) {
         const known = item.values.includes(saved);
         const custom = Boolean(saved && !known);
         return (
           `<div class="sim-input"><label for="var-${escapeAttr(key)}">%${escapeHtml(item.name)}%</label>` +
-          `<select id="var-${escapeAttr(key)}" data-var="${escapeAttr(key)}">` +
+          `<select id="var-${escapeAttr(key)}" data-var="${escapeAttr(key)}" ` +
+          `data-effective="${escapeAttr(saved)}" ` +
+          `data-derived="${derived}">` +
           '<option value="">— choose —</option>' +
           item.values
             .map(
@@ -476,7 +473,9 @@ function renderSimulationInputs() {
   const paths = state.parsed.paths
     .map((item, index) => {
       const key = normalizeDosPath(item);
-      const saved = scenario.paths[key] || "unknown";
+      const saved = Object.hasOwn(scenario.paths, key)
+        ? scenario.paths[key]
+        : "unknown";
       return (
         `<div class="sim-input"><label for="path-${index}">${escapeHtml(item)}</label>` +
         `<select id="path-${index}" data-path="${escapeAttr(key)}">` +
@@ -491,8 +490,12 @@ function renderSimulationInputs() {
       (request, index) =>
         `<div class="sim-input"><label for="outcome-${index}">Line ${request.line + 1}: ` +
         `${escapeHtml(request.source)} ERRORLEVEL</label><input id="outcome-${index}" ` +
-        `type="number" min="0" step="1" data-outcome="${escapeAttr(request.key)}" ` +
-        `value="${escapeAttr(scenario.outcomes[request.key] ?? "")}" ` +
+        `type="number" min="0" max="255" step="1" data-outcome="${escapeAttr(request.key)}" ` +
+        `value="${escapeAttr(
+          Object.hasOwn(scenario.outcomes, request.key)
+            ? scenario.outcomes[request.key]
+            : "",
+        )}" ` +
         'placeholder="required when reached"></div>',
     )
     .join("");
@@ -500,13 +503,54 @@ function renderSimulationInputs() {
     variables +
     paths +
     (outcomes ? `<h3 class="sim-subhead">Flow outcomes</h3>${outcomes}` : "");
-  const updateSimulation = () => {
-    collectSimulationValues();
+  const updateSimulation = (changedControl) => {
+    if (
+      changedControl.matches("[data-outcome]") &&
+      !changedControl.checkValidity()
+    ) {
+      const invalidMessage =
+        "Simulation input invalid: ERRORLEVEL must be an integer from 0 through 255.";
+      changedControl.value = "";
+      changedControl.setAttribute("aria-invalid", "true");
+      collectSimulationValues(changedControl);
+      recalculateTrace();
+      renderDiagram();
+      renderTraceView();
+      updateTraceSummary();
+      const saveCompletion = queueSave({ immediate: true });
+      setMessage(invalidMessage, "error");
+      void saveCompletion.then((result) => {
+        if (
+          result.status === "saved" &&
+          changedControl.isConnected &&
+          changedControl.getAttribute("aria-invalid") === "true"
+        ) {
+          setMessage(invalidMessage, "error");
+        }
+      });
+      return;
+    }
+    changedControl.removeAttribute("aria-invalid");
+    try {
+      collectSimulationValues(changedControl);
+    } catch (error) {
+      setMessage(`Simulation input invalid: ${error.message}`, "error");
+      return;
+    }
     recalculateTrace();
     renderDiagram();
     renderTraceView();
     updateTraceSummary();
     queueSave();
+    const changedVariable =
+      changedControl.dataset.var || changedControl.dataset.custom;
+    if (
+      changedVariable === "config" &&
+      state.parsed.configInfo?.menuDefault &&
+      storedSimulationScenario().variables.config === ""
+    ) {
+      renderSimulationInputs();
+    }
   };
   document.querySelectorAll("select[data-var]").forEach((select) => {
     select.onchange = () => {
@@ -514,7 +558,10 @@ function renderSimulationInputs() {
         `[data-custom="${CSS.escape(select.dataset.var)}"]`,
       );
       custom.classList.toggle("hidden", select.value !== "__custom");
-      updateSimulation();
+      if (select.value === "__custom" && !custom.value) {
+        custom.value = select.dataset.effective;
+      }
+      updateSimulation(select);
     };
   });
   document
@@ -522,47 +569,57 @@ function renderSimulationInputs() {
       "input[data-var], [data-custom], [data-path], [data-outcome]",
     )
     .forEach((control) => {
-      control.oninput = updateSimulation;
+      control.oninput = () => updateSimulation(control);
     });
   updateTraceSummary();
 }
 
-function collectSimulationValues() {
+function collectSimulationValues(changedControl) {
   const current = storedSimulationScenario();
-  const variables = { ...current.variables };
-  const paths = { ...current.paths };
-  const outcomes = { ...current.outcomes };
+  const variables = new Map(Object.entries(current.variables));
+  const paths = new Map(Object.entries(current.paths));
+  const outcomes = new Map(Object.entries(current.outcomes));
   document.querySelectorAll("[data-var]").forEach((control) => {
+    if (
+      control.dataset.derived === "true" &&
+      changedControl !== control &&
+      changedControl.dataset.custom !== control.dataset.var
+    ) {
+      return;
+    }
     let value = control.value;
     if (control.tagName === "SELECT" && value === "__custom") {
       value = document.querySelector(
         `[data-custom="${CSS.escape(control.dataset.var)}"]`,
       ).value;
     }
-    if (value && value !== "__custom") {
-      variables[control.dataset.var] = value;
+    if (
+      (value && value !== "__custom") ||
+      (control.dataset.var === "config" && value === "")
+    ) {
+      variables.set(control.dataset.var, value);
     } else {
-      delete variables[control.dataset.var];
+      variables.delete(control.dataset.var);
     }
   });
   document.querySelectorAll("[data-path]").forEach((select) => {
     if (select.value === "unknown") {
-      delete paths[select.dataset.path];
+      paths.delete(select.dataset.path);
     } else {
-      paths[select.dataset.path] = select.value;
+      paths.set(select.dataset.path, select.value);
     }
   });
   document.querySelectorAll("[data-outcome]").forEach((input) => {
     if (input.value !== "") {
-      outcomes[input.dataset.outcome] = Number(input.value);
+      outcomes.set(input.dataset.outcome, Number(input.value));
     } else {
-      delete outcomes[input.dataset.outcome];
+      outcomes.delete(input.dataset.outcome);
     }
   });
   state.project = updateProjectSimulationScenario(state.project, {
-    variables,
-    paths,
-    outcomes,
+    variables: Object.fromEntries(variables),
+    paths: Object.fromEntries(paths),
+    outcomes: Object.fromEntries(outcomes),
   });
   $("resetSimulation").disabled = !scenarioHasValues();
 }
@@ -654,13 +711,30 @@ async function importSelection(fileList) {
     state.currentFile = Object.keys(state.project.files)[0] || null;
     state.selectedId = null;
     render();
-    await queueSave({ immediate: true });
-    setMessage(
-      imported.migrated
-        ? "Imported and upgraded a legacy project."
-        : "Project imported.",
-      "success",
-    );
+    const saveResult = await queueSave({ immediate: true });
+    if (imported.discardedSimulationOutcomes) {
+      const count = imported.discardedSimulationOutcomes;
+      const repairMessage = `Project imported; cleared ${count} out-of-range simulation ${
+        count === 1 ? "outcome" : "outcomes"
+      }.`;
+      if (saveResult.status === "failed") {
+        setMessage(
+          `${repairMessage} Save failed: ${saveResult.error.message}`,
+          "error",
+        );
+      } else if (saveResult.status === "superseded") {
+        setMessage(`Unsaved changes · ${repairMessage}`);
+      } else {
+        setMessage(`Saved · ${repairMessage}`, "success");
+      }
+    } else if (saveResult.status === "saved") {
+      setMessage(
+        imported.migrated
+          ? "Imported and upgraded a legacy project."
+          : "Project imported.",
+        "success",
+      );
+    }
     return;
   }
 
@@ -787,7 +861,19 @@ try {
   if (loaded) {
     state.project = loaded.project;
     state.currentFile = Object.keys(state.project.files)[0] || null;
-    if (loaded.migratedFrom) {
+    if (loaded.discardedSimulationOutcomes) {
+      const count = loaded.discardedSimulationOutcomes;
+      setMessage(
+        `Recovered project and cleared ${count} out-of-range simulation ${
+          count === 1 ? "outcome" : "outcomes"
+        }.${
+          loaded.repairPersisted
+            ? ""
+            : " The repaired project could not be saved."
+        }`,
+        loaded.repairPersisted ? "success" : "error",
+      );
+    } else if (loaded.migratedFrom) {
       setMessage(
         `Recovered project data from ${loaded.migratedFrom}.`,
         "success",

@@ -79,8 +79,11 @@ test("the public HTML references only present runtime assets", () => {
   ]) {
     assert.match(read(module), /\.js\?v=0\.5\.1-dev/);
   }
+  assert.match(read("public/app.js"), /save-queue\.js\?v=0\.5\.1-dev/);
+  assert.match(read("public/app.js"), /if \(saveResult\.status === "saved"\)/);
   assert.doesNotThrow(() => read("public/styles.css"));
   assert.doesNotThrow(() => read("public/app.js"));
+  assert.doesNotThrow(() => read("public/lib/save-queue.js"));
 });
 
 test("the human-facing roadmap records the delivery and result policies", () => {
@@ -94,6 +97,14 @@ test("the human-facing roadmap records the delivery and result policies", () => 
     /reaches\s+`main` only after required CI succeeds and the pull request is merged/,
   );
   assert.match(roadmap, /\.agent\/test-results\//);
+  assert.match(
+    roadmap,
+    /Code changes and major rework receive challenged adversarial review/,
+  );
+  assert.match(
+    read("docs/HUMAN_TESTING.md"),
+    /Simple documentation and progress-only updates are exempt/,
+  );
   assert.match(
     roadmap,
     /Formal Git tags and GitHub releases begin at `1\.0\.0`/,

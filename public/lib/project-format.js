@@ -72,7 +72,7 @@ export function createSimulationScenario() {
   };
 }
 
-function normalizeSimulationScenario(value) {
+function normalizeSimulationScenario(value, options = {}) {
   const scenario = safeObject(value, "Simulation scenario");
   const variableValues = safeObject(
     scenario.variables === undefined ? {} : scenario.variables,
@@ -86,9 +86,9 @@ function normalizeSimulationScenario(value) {
     scenario.outcomes === undefined ? {} : scenario.outcomes,
     "Simulation outcomes",
   );
-  const variables = {};
-  const paths = {};
-  const outcomes = {};
+  const variableEntries = [];
+  const pathEntries = [];
+  const outcomeEntries = [];
 
   for (const [name, value] of Object.entries(variableValues)) {
     const key = norm(name);
@@ -97,7 +97,7 @@ function normalizeSimulationScenario(value) {
         "Simulation variable names must be non-empty and values must be text.",
       );
     }
-    if (value) variables[key] = value;
+    if (value || key === "config") variableEntries.push([key, value]);
   }
 
   for (const [path, value] of Object.entries(pathValues)) {
@@ -107,28 +107,43 @@ function normalizeSimulationScenario(value) {
         'Simulation path values must be either "yes" or "no".',
       );
     }
-    paths[key] = value;
+    pathEntries.push([key, value]);
   }
 
   for (const [key, value] of Object.entries(outcomeValues)) {
     const normalizedKey = key.trim();
     if (
+      options.repairOutOfRangeOutcomes &&
+      normalizedKey &&
+      typeof value === "number" &&
+      Number.isInteger(value) &&
+      value > 255
+    ) {
+      options.discardedSimulationOutcomes += 1;
+      continue;
+    }
+    if (
       !normalizedKey ||
       typeof value !== "number" ||
       !Number.isInteger(value) ||
-      value < 0
+      value < 0 ||
+      value > 255
     ) {
       throw new ProjectFormatError(
-        "Simulation outcomes must be non-negative integers.",
+        "Simulation outcomes must be integers from 0 through 255.",
       );
     }
-    outcomes[normalizedKey] = value;
+    outcomeEntries.push([normalizedKey, value]);
   }
 
-  return { variables, paths, outcomes };
+  return {
+    variables: Object.fromEntries(variableEntries),
+    paths: Object.fromEntries(pathEntries),
+    outcomes: Object.fromEntries(outcomeEntries),
+  };
 }
 
-function ensureMetadata(project) {
+function ensureMetadata(project, options) {
   project.metadata = safeObject(project.metadata || {}, "Project metadata");
   project.metadata.notes = safeObject(
     project.metadata.notes || {},
@@ -142,6 +157,7 @@ function ensureMetadata(project) {
     project.metadata.simulationScenario === undefined
       ? createSimulationScenario()
       : project.metadata.simulationScenario,
+    options,
   );
 
   for (const [path, file] of Object.entries(project.files)) {
@@ -171,7 +187,7 @@ function ensureMetadata(project) {
   }
 }
 
-export function validateProject(value) {
+export function validateProject(value, options = {}) {
   const input = safeObject(clone(value), "Project");
   if (typeof input.name !== "string" || !input.name.trim()) {
     throw new ProjectFormatError("Project name must be non-empty text.");
@@ -187,7 +203,7 @@ export function validateProject(value) {
     normalizedFiles[path] = normalizeFileRecord(record, path);
   }
   input.files = normalizedFiles;
-  ensureMetadata(input);
+  ensureMetadata(input, options);
   return input;
 }
 
@@ -212,6 +228,10 @@ export function updateProjectSimulationScenario(projectValue, scenario) {
 
 export function importProjectDocument(value) {
   const document = safeObject(value, "Project document");
+  const repairOptions = {
+    repairOutOfRangeOutcomes: true,
+    discardedSimulationOutcomes: 0,
+  };
   if (document.formatVersion !== undefined) {
     if (document.formatVersion !== PROJECT_FORMAT_VERSION) {
       throw new ProjectFormatError(
@@ -219,9 +239,10 @@ export function importProjectDocument(value) {
       );
     }
     return {
-      project: validateProject(document.project),
+      project: validateProject(document.project, repairOptions),
       migrated: false,
       sourceFormat: `batflow-${document.formatVersion}`,
+      discardedSimulationOutcomes: repairOptions.discardedSimulationOutcomes,
     };
   }
 
@@ -231,9 +252,10 @@ export function importProjectDocument(value) {
     throw new ProjectFormatError("Unrecognized legacy project document.");
   }
   return {
-    project: validateProject(legacyProject),
+    project: validateProject(legacyProject, repairOptions),
     migrated: true,
     sourceFormat: "legacy-unversioned",
+    discardedSimulationOutcomes: repairOptions.discardedSimulationOutcomes,
   };
 }
 

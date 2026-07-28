@@ -24,7 +24,14 @@ and navigation state to source lines.
 Project metadata also contains one active `simulationScenario`. Its
 `variables`, `paths`, and `outcomes` maps are shared across project files and
 round-trip through browser storage and project export. Unknown path state is
-represented by an absent entry. Named scenarios are not part of format version 1.
+represented by an absent entry. Outcome map keys are opaque identities scoped
+to the project file and producing command; consumers must not construct or
+interpret them. ERRORLEVEL outcomes are integers from `0` through `255`.
+Previously accepted larger values are cleared during import or storage recovery
+without discarding the rest of the project. An absent `config` variable permits
+live derivation from CONFIG.SYS `MENUDEFAULT`; an explicitly stored empty
+`config` suppresses that default and evaluates as an empty DOS variable until
+simulation inputs are reset. Named scenarios are not part of format version 1.
 
 Imports are fully parsed and validated before replacing the open project.
 Absolute paths, parent traversal, malformed data, and unknown future versions

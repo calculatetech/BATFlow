@@ -9,6 +9,21 @@ After approval, commit and push the exact reviewed tree. Required CI then
 confirms that the committed source reproduces the automated checks and
 deployment bundle. Keep screenshots and detailed logs outside Git.
 
+## Adversarial review gate
+
+Code changes and major rework require independent, read-only adversarial review
+before the candidate is handed to the project owner. Each reported issue must
+be reproduced or otherwise evidenced, challenged for material impact on the
+accepted scope, and rejected when it would create speculative or unrelated
+work. Corrective code changes reset this gate and require focused re-review.
+Review assignments are single-use: completed reviewer agents are closed and
+must never be reactivated for another pass. Exactly one reviewer assignment may
+be active at a time, and that reviewer is scoped to the complete candidate
+change rather than a partial review domain.
+
+Simple documentation and progress-only updates are exempt. Review notes and
+probe output belong under ignored `.agent/test-results/`, not in commits.
+
 ## Required checks
 
 - Serve `public/` from the implementation worktree and confirm the displayed

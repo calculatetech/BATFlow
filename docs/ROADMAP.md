@@ -28,6 +28,8 @@ is the human-facing record of completed foundations and remaining priorities.
   `main` only after required CI succeeds and the pull request is merged.
 - CI-generated bundles validate packaging and reproducibility; they are not
   substitutes for human testing.
+- Code changes and major rework receive challenged adversarial review before
+  human approval. Simple documentation and progress updates are exempt.
 - Private fixtures live under ignored `docs/private/`. Detailed local results
   live under ignored `.agent/test-results/`; neither is committed.
 - Roadmap status changes accompany the work they describe.
