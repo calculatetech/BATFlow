@@ -8,7 +8,7 @@ import {
   parseDosArgs,
   resolveBatchTarget,
   stripCommandPrefix,
-} from "./batch-core.js?v=0.5.1-dev";
+} from "./batch-core.js?v=0.5.2-dev";
 
 function actionInfo(action, path, projectFiles) {
   const text = stripCommandPrefix(action);
@@ -48,7 +48,7 @@ function producesOutcome(info) {
 
 function outcomeRequestKey(parsed, block, kind) {
   return JSON.stringify([
-    parsed.path,
+    parsed.fileId || parsed.path,
     block.id,
     kind,
     stripCommandPrefix(block.raw).trim(),

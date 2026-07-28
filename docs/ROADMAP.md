@@ -2,7 +2,7 @@
 
 Last updated: July 28, 2026
 
-Current baseline: **0.5.1 development**
+Current baseline: **0.5.2 development**
 
 BATFlow, formerly called `passes`, is being converted from an unversioned
 prototype into a managed and genuinely usable application. The detailed audit
@@ -71,9 +71,19 @@ that BATFlow is stable, complete, or ready for formal release.
 - Preserved CONFIG.SYS-derived defaults without storing them until simulation
   input interaction.
 
+## Completed: 0.5.2 project and file identity hardening
+
+- Added editable project names, safe export filenames, durable file IDs, and a
+  persisted entry-file designation that prefers root `AUTOEXEC.BAT`.
+- Added rename, deletion, entry selection, relative-folder import, DOS 8.3 path
+  diagnostics, and case-insensitive collision controls.
+- Added an atomic import preview with explicit folder-root placement and
+  Replace, Keep both, or Skip decisions.
+- Advanced `.batflow` project format to version 2 with tested version 1
+  migration while retaining IndexedDB schema version 1.
+
 ## Priority 1: 0.5.x usability hardening
 
-- Project naming and richer file identity and collision controls.
 - Structured diagnostics beyond the current save and import status.
 - Broader browser compatibility, cache behavior, and offline behavior.
 - Terminal-newline presentation cleanup and additional keyboard ergonomics.

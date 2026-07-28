@@ -4,6 +4,32 @@ BATFlow uses Semantic Versioning for managed development milestones. Formal Git
 tags and GitHub releases begin at `1.0.0`. The project-format, browser-storage,
 and interpreter-profile versions are managed separately.
 
+## 0.5.2 — project and file identity hardening
+
+### Added
+
+- Editable project names and durable, user-selectable entry files.
+- Relative-folder import with explicit root placement and a complete preview
+  before mutation.
+- File rename and deletion controls, DOS 8.3 path diagnostics, and
+  case-insensitive Replace, Keep both, or Skip collision choices.
+
+### Changed
+
+- `.batflow` project format 2 keys notes, line identities, and outcomes through
+  durable file IDs. Version 1 projects migrate on load or import.
+- Replacing a project file retains its identity and entry designation while
+  clearing source-attached notes, line identities, and outcomes.
+- Unsupported files in a folder selection are skipped with a visible summary.
+
+### Fixed
+
+- File renames no longer detach notes, outcomes, or entry-file state.
+- Case or separator variants can no longer create ambiguous duplicate DOS
+  paths.
+- Imported non-8.3 names remain unchanged and are reported as warnings instead
+  of being silently renamed.
+
 ## 0.5.1 — simulation-state hardening
 
 ### Added

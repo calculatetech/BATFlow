@@ -1,6 +1,6 @@
 {
   "name": "batflow",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "private": true,
   "type": "module",
   "description": "A client-side visual editor and control-flow simulator for MS-DOS 7.1 batch files.",

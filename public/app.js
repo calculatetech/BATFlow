@@ -3,29 +3,37 @@ import {
   norm,
   parseBatch,
   resolveBatchTarget,
-} from "./lib/batch-core.js?v=0.5.1-dev";
+} from "./lib/batch-core.js?v=0.5.2-dev";
 import {
   PRODUCT_VERSION,
   ProjectFormatError,
   addTextFile,
+  analyzeProjectPath,
   createProject,
   decodeUtf8,
+  deleteProjectFile,
   deleteProjectLine,
   duplicateProjectLine,
+  filePathForId,
+  findProjectPath,
   importProjectDocument,
+  renameProjectFile,
   serializeProject,
+  setProjectEntryFile,
+  uniqueDosProjectPath,
   updateFileContent,
+  updateProjectName,
   updateProjectSimulationScenario,
-} from "./lib/project-format.js?v=0.5.1-dev";
+} from "./lib/project-format.js?v=0.5.2-dev";
 import {
   loadCurrentProject,
   saveCurrentProject,
-} from "./lib/storage.js?v=0.5.1-dev";
-import { createSaveQueue } from "./lib/save-queue.js?v=0.5.1-dev";
+} from "./lib/storage.js?v=0.5.2-dev";
+import { createSaveQueue } from "./lib/save-queue.js?v=0.5.2-dev";
 import {
   collectOutcomeRequests,
   simulate,
-} from "./lib/simulation.js?v=0.5.1-dev";
+} from "./lib/simulation.js?v=0.5.2-dev";
 
 const $ = (id) => document.getElementById(id);
 const state = {
@@ -39,6 +47,7 @@ const state = {
   traceEnabled: true,
   message: "",
   messageKind: "",
+  pendingImport: null,
 };
 
 function escapeHtml(value) {
@@ -73,7 +82,15 @@ const projectSaveQueue = createSaveQueue({
 });
 
 function projectHasWork() {
-  return Object.keys(state.project.files).length > 0;
+  return (
+    Object.keys(state.project.files).length > 0 ||
+    state.project.name !== "Untitled" ||
+    scenarioHasValues()
+  );
+}
+
+function entryFilePath(project = state.project) {
+  return filePathForId(project, project.metadata.entryFileId);
 }
 
 function storedSimulationScenario() {
@@ -112,7 +129,8 @@ function parseCurrent() {
   }
   const file = state.project.files[state.currentFile];
   state.parsed = parseBatch(file.content, state.currentFile, {
-    lineIds: state.project.metadata.lineIds[state.currentFile],
+    fileId: file.id,
+    lineIds: state.project.metadata.lineIds[file.id],
     projectFiles: state.project.files,
   });
   if (
@@ -156,12 +174,26 @@ function render() {
 
 function renderFiles() {
   const files = Object.keys(state.project.files);
+  const nameInput = $("projectName");
+  if (document.activeElement !== nameInput)
+    nameInput.value = state.project.name;
   $("fileList").innerHTML = files.length
     ? files
         .map(
           (path) =>
             `<button class="file-item ${path === state.currentFile ? "active" : ""}" ` +
-            `data-file="${escapeAttr(path)}" type="button">${escapeHtml(path)}</button>`,
+            `data-file="${escapeAttr(path)}" type="button">` +
+            `<span>${escapeHtml(path)}</span>` +
+            `${
+              state.project.files[path].id ===
+              state.project.metadata.entryFileId
+                ? '<span class="file-badge">ENTRY</span>'
+                : ""
+            }${
+              analyzeProjectPath(path).warnings.length
+                ? '<span class="file-warning" aria-label="Path warning">!</span>'
+                : ""
+            }</button>`,
         )
         .join("")
     : '<p class="empty-state">Import a UTF-8 BAT, SYS, or TXT file.</p>';
@@ -172,6 +204,13 @@ function renderFiles() {
       render();
     };
   });
+  const selected = state.currentFile
+    ? state.project.files[state.currentFile]
+    : null;
+  $("renameFile").disabled = !selected;
+  $("deleteFile").disabled = !selected;
+  $("setEntryFile").disabled =
+    !selected || selected.id === state.project.metadata.entryFileId;
 }
 
 function renderEditor() {
@@ -360,7 +399,8 @@ function renderInspector() {
 }
 
 function getNote(id) {
-  return state.project.metadata.notes[state.currentFile]?.[id] || "";
+  const fileId = state.project.files[state.currentFile]?.id;
+  return state.project.metadata.notes[fileId]?.[id] || "";
 }
 
 function editBlock(block, raw, note) {
@@ -374,7 +414,8 @@ function editBlock(block, raw, note) {
     state.currentFile,
     lines.join(separator),
   );
-  state.project.metadata.notes[state.currentFile][block.id] = note;
+  const fileId = state.project.files[state.currentFile].id;
+  state.project.metadata.notes[fileId][block.id] = note;
   render();
   queueSave();
 }
@@ -385,12 +426,24 @@ function renderValidation() {
       '<div class="empty-state">No file selected.</div>';
     return;
   }
-  $("validation").innerHTML = state.parsed.validations.length
-    ? state.parsed.validations
+  const pathWarnings = analyzeProjectPath(state.currentFile).warnings.map(
+    (message) => ({
+      message: `Project path: ${message}`,
+      severity: "warning",
+      blockId: "",
+    }),
+  );
+  const validations = [...pathWarnings, ...state.parsed.validations];
+  $("validation").innerHTML = validations.length
+    ? validations
         .map(
           (item) =>
             `<button class="validation-item ${item.severity === "error" ? "error" : ""}" ` +
-            `data-validation-block="${escapeAttr(item.blockId)}" type="button">` +
+            `${
+              item.blockId
+                ? `data-validation-block="${escapeAttr(item.blockId)}"`
+                : "disabled"
+            } type="button">` +
             `${escapeHtml(item.message)}</button>`,
         )
         .join("")
@@ -675,8 +728,8 @@ function applyView() {
 
 function updateStatus() {
   $("statusText").textContent = state.parsed
-    ? `${state.currentFile} · ${state.parsed.blocks.length} lines · v${PRODUCT_VERSION} · development`
-    : `v${PRODUCT_VERSION} · development`;
+    ? `${state.project.name} · ${state.currentFile} · ${state.parsed.blocks.length} lines · v${PRODUCT_VERSION} · development`
+    : `${state.project.name} · v${PRODUCT_VERSION} · development`;
   const exportButton = $("exportBat");
   exportButton.disabled = !state.currentFile;
 }
@@ -689,48 +742,251 @@ function download(name, content, type = "text/plain") {
   setTimeout(() => URL.revokeObjectURL(anchor.href), 1000);
 }
 
-async function importSelection(fileList) {
+function resetImportDialog() {
+  state.pendingImport = null;
+  $("importSummary").textContent =
+    "Browse for source files, a source folder, or one BATFlow project.";
+  $("importPreview").innerHTML = "";
+  $("importError").textContent = "";
+  $("confirmImport").disabled = true;
+  $("folderRootChoice").classList.add("hidden");
+  document
+    .querySelectorAll('input[name="folderRoot"]')
+    .forEach((radio) => (radio.checked = false));
+}
+
+function importedPath(record, rootMode) {
+  if (!record.fromFolder || rootMode === "keep") return record.rawPath;
+  const parts = record.rawPath.split("/");
+  return parts.length > 1 ? parts.slice(1).join("/") : record.rawPath;
+}
+
+function projectDirectoryKey(path) {
+  const parts = String(path ?? "")
+    .replace(/\\/g, "/")
+    .split("/");
+  parts.pop();
+  return parts.join("/").toLowerCase();
+}
+
+function validKeepDestination(sourcePath, destination) {
+  const analysis = analyzeProjectPath(destination);
+  const filename = String(destination ?? "")
+    .replace(/\\/g, "/")
+    .split("/")
+    .at(-1);
+  return (
+    analysis.safe &&
+    analysis.supportedType &&
+    projectDirectoryKey(destination) === projectDirectoryKey(sourcePath) &&
+    analyzeProjectPath(filename).dos83Compliant
+  );
+}
+
+function renderImportPreview() {
+  const pending = state.pendingImport;
+  if (!pending) return;
+  $("importError").textContent = "";
+  if (pending.kind === "project") {
+    const warnings = Object.keys(pending.imported.project.files).filter(
+      (path) => analyzeProjectPath(path).warnings.length,
+    ).length;
+    $("importSummary").textContent = `${
+      projectHasWork() ? "This will replace the open project. " : ""
+    }${pending.imported.project.name} · ${
+      Object.keys(pending.imported.project.files).length
+    } files${warnings ? ` · ${warnings} path warnings` : ""}`;
+    $("importPreview").innerHTML = "";
+    $("confirmImport").disabled = false;
+    return;
+  }
+  if (pending.fromFolder && !pending.rootMode) {
+    $("importSummary").textContent =
+      "Choose how the selected folder should appear in the project.";
+    $("importPreview").innerHTML = "";
+    $("confirmImport").disabled = true;
+    return;
+  }
+
+  let temporary = state.project;
+  const resolved = [];
+  for (const record of pending.records) {
+    const path = importedPath(record, pending.rootMode);
+    const existing = findProjectPath(temporary, path);
+    const conflict = Boolean(existing);
+    let action = conflict ? record.action || "" : "import";
+    let destination = path;
+    let error = "";
+    if (action === "replace") destination = existing;
+    if (action === "keep") {
+      destination =
+        record.customDestination ||
+        record.suggestedDestination ||
+        uniqueDosProjectPath(temporary, path);
+      record.suggestedDestination ||= destination;
+      if (!validKeepDestination(path, destination)) {
+        error =
+          "Keep-both destinations must stay in the same directory and use a safe DOS 8.3 filename.";
+      } else if (findProjectPath(temporary, destination)) {
+        error = "Keep-both destination already exists.";
+      }
+    }
+    if (!conflict) record.action = "";
+    if (!error && action && action !== "skip") {
+      try {
+        temporary = addTextFile(temporary, destination, record.text, {
+          replace: action === "replace",
+        });
+      } catch (caught) {
+        error = caught.message;
+      }
+    }
+    resolved.push({
+      record,
+      path,
+      conflict,
+      action,
+      destination,
+      error,
+      analysis: analyzeProjectPath(path),
+    });
+  }
+  pending.resolved = resolved;
+  const unsupported = pending.skipped.length;
+  $("importSummary").textContent =
+    `${pending.records.length} supported source ${
+      pending.records.length === 1 ? "file" : "files"
+    } selected` +
+    (unsupported
+      ? ` · ${unsupported} unsupported ${
+          unsupported === 1 ? "file" : "files"
+        } will be skipped`
+      : "");
+  $("importPreview").innerHTML = resolved
+    .map(
+      (item, index) =>
+        `<div class="import-row"><div>${escapeHtml(item.path)}</div>` +
+        (item.conflict
+          ? `<select data-import-action="${index}" aria-label="Collision action for ${escapeAttr(item.path)}">` +
+            '<option value="">Choose action…</option>' +
+            `<option value="replace" ${item.action === "replace" ? "selected" : ""}>Replace</option>` +
+            `<option value="keep" ${item.action === "keep" ? "selected" : ""}>Keep both</option>` +
+            `<option value="skip" ${item.action === "skip" ? "selected" : ""}>Skip</option></select>`
+          : "<span>Import</span>") +
+        (item.action === "keep"
+          ? `<input class="keep-path" data-keep-path="${index}" value="${escapeAttr(item.destination)}" ` +
+            `aria-label="Keep-both destination for ${escapeAttr(item.path)}">`
+          : "") +
+        item.analysis.warnings
+          .map(
+            (warning) =>
+              `<div class="import-row-warning">${escapeHtml(warning)} · imported unchanged</div>`,
+          )
+          .join("") +
+        (item.error
+          ? `<div class="import-row-warning">${escapeHtml(item.error)}</div>`
+          : "") +
+        "</div>",
+    )
+    .join("");
+  document.querySelectorAll("[data-import-action]").forEach((select) => {
+    select.onchange = () => {
+      const item = resolved[Number(select.dataset.importAction)];
+      item.record.action = select.value;
+      if (select.value !== "keep") item.record.customDestination = "";
+      renderImportPreview();
+    };
+  });
+  document.querySelectorAll("[data-keep-path]").forEach((input) => {
+    input.onchange = () => {
+      const item = resolved[Number(input.dataset.keepPath)];
+      item.record.customDestination = input.value;
+      renderImportPreview();
+    };
+  });
+  $("confirmImport").disabled =
+    !resolved.length ||
+    resolved.some(
+      (item) => item.error || (item.conflict && !item.record.action),
+    );
+}
+
+async function prepareImport(fileList, { fromFolder = false } = {}) {
   const files = [...fileList];
   if (!files.length) return;
+  state.pendingImport = null;
+  $("importPreview").innerHTML = "";
+  $("confirmImport").disabled = true;
   const projectFiles = files.filter((file) => /\.batflow$/i.test(file.name));
   if (projectFiles.length) {
-    if (files.length !== 1) {
+    if (files.length !== 1 || fromFolder) {
       throw new ProjectFormatError(
-        "Import a BATFlow project by itself, not with source files.",
+        "Import a BATFlow project by itself, not with source files or a folder.",
       );
     }
     const text = decodeUtf8(await projectFiles[0].arrayBuffer());
-    const imported = importProjectDocument(JSON.parse(text));
-    if (
-      projectHasWork() &&
-      !window.confirm("Replace the current project with the imported project?")
-    ) {
-      return;
-    }
+    state.pendingImport = {
+      kind: "project",
+      imported: importProjectDocument(JSON.parse(text)),
+    };
+    renderImportPreview();
+    return;
+  }
+
+  const supported = files.filter((file) =>
+    /\.(?:bat|sys|txt)$/i.test(file.name),
+  );
+  const records = [];
+  for (const file of supported) {
+    records.push({
+      rawPath: fromFolder ? file.webkitRelativePath || file.name : file.name,
+      fromFolder,
+      text: decodeUtf8(await file.arrayBuffer()),
+      action: "",
+      customDestination: "",
+    });
+  }
+  state.pendingImport = {
+    kind: "sources",
+    fromFolder,
+    rootMode: fromFolder ? null : "keep",
+    records,
+    skipped: files.filter((file) => !supported.includes(file)),
+    resolved: [],
+  };
+  $("folderRootChoice").classList.toggle("hidden", !fromFolder);
+  renderImportPreview();
+}
+
+async function applyPendingImport() {
+  const pending = state.pendingImport;
+  if (!pending) return;
+  if (pending.kind === "project") {
+    const imported = pending.imported;
     state.project = imported.project;
-    state.currentFile = Object.keys(state.project.files)[0] || null;
+    state.currentFile = entryFilePath();
     state.selectedId = null;
+    $("importDialog").close();
+    resetImportDialog();
     render();
     const saveResult = await queueSave({ immediate: true });
-    if (imported.discardedSimulationOutcomes) {
-      const count = imported.discardedSimulationOutcomes;
-      const repairMessage = `Project imported; cleared ${count} out-of-range simulation ${
-        count === 1 ? "outcome" : "outcomes"
-      }.`;
-      if (saveResult.status === "failed") {
-        setMessage(
-          `${repairMessage} Save failed: ${saveResult.error.message}`,
-          "error",
-        );
-      } else if (saveResult.status === "superseded") {
-        setMessage(`Unsaved changes · ${repairMessage}`);
-      } else {
-        setMessage(`Saved · ${repairMessage}`, "success");
-      }
+    const count = imported.discardedSimulationOutcomes;
+    const repairMessage = count
+      ? `Project imported; cleared ${count} out-of-range simulation ${
+          count === 1 ? "outcome" : "outcomes"
+        }.`
+      : "Project imported.";
+    if (saveResult.status === "failed") {
+      setMessage(
+        `${repairMessage} Save failed: ${saveResult.error.message}`,
+        "error",
+      );
+    } else if (count) {
+      setMessage(`Saved · ${repairMessage}`, "success");
     } else if (saveResult.status === "saved") {
       setMessage(
         imported.migrated
-          ? "Imported and upgraded a legacy project."
+          ? `Imported and upgraded ${imported.sourceFormat} to project format 2.`
           : "Project imported.",
         "success",
       );
@@ -738,56 +994,190 @@ async function importSelection(fileList) {
     return;
   }
 
-  let nextProject = state.project;
+  let project = state.project;
   let firstImported = null;
-  for (const file of files) {
-    if (!/\.(?:bat|sys|txt)$/i.test(file.name)) {
-      throw new ProjectFormatError(`Unsupported file type: ${file.name}`);
-    }
-    const path = file.webkitRelativePath || file.name;
-    if (
-      nextProject.files[path] &&
-      !window.confirm(`Replace the existing project file "${path}"?`)
-    ) {
-      continue;
-    }
-    const text = decodeUtf8(await file.arrayBuffer());
-    nextProject = addTextFile(nextProject, path, text);
-    firstImported ||= path;
+  for (const item of pending.resolved) {
+    if (item.action === "skip") continue;
+    project = addTextFile(project, item.destination, item.record.text, {
+      replace: item.action === "replace",
+    });
+    firstImported ||= item.destination;
   }
-  state.project = nextProject;
-  state.currentFile ||= firstImported;
+  state.project = project;
+  state.currentFile ||= entryFilePath() || firstImported;
+  state.selectedId = null;
+  const skipped = pending.skipped.length;
+  const warningCount = pending.resolved.filter(
+    (item) => item.analysis.warnings.length,
+  ).length;
+  $("importDialog").close();
+  resetImportDialog();
   render();
-  await queueSave({ immediate: true });
+  const saveResult = await queueSave({ immediate: true });
+  if (saveResult.status === "saved" && (skipped || warningCount)) {
+    setMessage(
+      `Saved · Import complete${
+        skipped ? `; skipped ${skipped} unsupported files` : ""
+      }${warningCount ? `; ${warningCount} path warnings` : ""}.`,
+      "success",
+    );
+  }
 }
 
+$("openImport").onclick = () => {
+  resetImportDialog();
+  $("importDialog").showModal();
+};
+$("browseFiles").onclick = () => $("fileInput").click();
+$("browseFolder").onclick = () => $("folderInput").click();
+$("cancelImport").onclick = () => {
+  $("importDialog").close();
+  resetImportDialog();
+};
 $("fileInput").onchange = async (event) => {
   try {
-    await importSelection(event.target.files);
+    await prepareImport(event.target.files);
+    if (!$("importDialog").open) $("importDialog").showModal();
   } catch (error) {
+    $("importError").textContent = `Import failed: ${error.message}`;
+    setMessage(`Import failed: ${error.message}`, "error");
+    if (!$("importDialog").open) $("importDialog").showModal();
+  } finally {
+    event.target.value = "";
+  }
+};
+$("folderInput").onchange = async (event) => {
+  try {
+    await prepareImport(event.target.files, { fromFolder: true });
+  } catch (error) {
+    $("importError").textContent = `Import failed: ${error.message}`;
     setMessage(`Import failed: ${error.message}`, "error");
   } finally {
     event.target.value = "";
   }
 };
+document.querySelectorAll('input[name="folderRoot"]').forEach((radio) => {
+  radio.onchange = () => {
+    state.pendingImport.rootMode = radio.value;
+    renderImportPreview();
+  };
+});
+$("importForm").onsubmit = async (event) => {
+  event.preventDefault();
+  try {
+    await applyPendingImport();
+  } catch (error) {
+    $("importError").textContent = `Import failed: ${error.message}`;
+    setMessage(`Import failed: ${error.message}`, "error");
+  }
+};
 
-$("newProject").onclick = async () => {
+$("newProject").onclick = () => {
+  $("newProjectName").value = "Untitled";
+  $("newProjectWarning").textContent = projectHasWork()
+    ? "Creating this project will discard the currently open project."
+    : "";
+  $("newProjectDialog").showModal();
+};
+$("cancelNewProject").onclick = () => $("newProjectDialog").close();
+$("newProjectForm").onsubmit = async (event) => {
+  event.preventDefault();
+  try {
+    state.project = createProject($("newProjectName").value.trim());
+    state.currentFile = null;
+    state.selectedId = null;
+    $("newProjectDialog").close();
+    render();
+    await queueSave({ immediate: true });
+  } catch (error) {
+    $("newProjectWarning").textContent = error.message;
+  }
+};
+
+$("projectName").onchange = () => {
+  try {
+    state.project = updateProjectName(state.project, $("projectName").value);
+    renderFiles();
+    updateStatus();
+    queueSave();
+  } catch (error) {
+    $("projectName").value = state.project.name;
+    setMessage(`Project name invalid: ${error.message}`, "error");
+  }
+};
+$("projectName").onkeydown = (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    $("projectName").blur();
+  }
+};
+
+$("renameFile").onclick = () => {
+  if (!state.currentFile) return;
+  $("renameFilePath").value = state.currentFile;
+  $("renameFileError").textContent = "";
+  $("renameFileDialog").showModal();
+};
+$("cancelRenameFile").onclick = () => $("renameFileDialog").close();
+$("renameFileForm").onsubmit = async (event) => {
+  event.preventDefault();
+  try {
+    const previousPath = state.currentFile;
+    const nextPath = $("renameFilePath").value;
+    state.project = renameProjectFile(state.project, previousPath, nextPath);
+    state.currentFile = nextPath;
+    state.selectedId = null;
+    $("renameFileDialog").close();
+    render();
+    await queueSave({ immediate: true });
+  } catch (error) {
+    $("renameFileError").textContent = error.message;
+  }
+};
+
+$("deleteFile").onclick = async () => {
   if (
-    projectHasWork() &&
-    !window.confirm("Discard the current project and create a new one?")
+    !state.currentFile ||
+    !window.confirm(
+      `Delete "${state.currentFile}" and its notes and simulation outcomes?`,
+    )
   ) {
     return;
   }
-  state.project = createProject();
-  state.currentFile = null;
+  const deletedPath = state.currentFile;
+  state.project = deleteProjectFile(state.project, deletedPath);
+  state.currentFile = entryFilePath();
   state.selectedId = null;
   render();
   await queueSave({ immediate: true });
 };
 
+$("setEntryFile").onclick = async () => {
+  const file = state.currentFile
+    ? state.project.files[state.currentFile]
+    : null;
+  if (!file) return;
+  state.project = setProjectEntryFile(state.project, file.id);
+  renderFiles();
+  await queueSave({ immediate: true });
+};
+
+function projectDownloadName(name) {
+  const safe = [...String(name ?? "")]
+    .map((character) =>
+      character.charCodeAt(0) < 32 || '<>:"/\\|?*'.includes(character)
+        ? "_"
+        : character,
+    )
+    .join("")
+    .replace(/[ .]+$/g, "")
+    .trim();
+  return `${safe || "project"}.batflow`;
+}
+
 $("exportProject").onclick = () => {
   download(
-    `${state.project.name || "project"}.batflow`,
+    projectDownloadName(state.project.name),
     serializeProject(state.project),
     "application/octet-stream",
   );
@@ -796,7 +1186,7 @@ $("exportProject").onclick = () => {
 $("exportBat").onclick = () => {
   if (!state.currentFile) return;
   download(
-    state.currentFile.split("/").pop(),
+    state.currentFile.split(/[\\/]/).pop(),
     state.project.files[state.currentFile].content,
   );
 };
@@ -860,7 +1250,7 @@ try {
   const loaded = await loadCurrentProject();
   if (loaded) {
     state.project = loaded.project;
-    state.currentFile = Object.keys(state.project.files)[0] || null;
+    state.currentFile = entryFilePath();
     if (loaded.discardedSimulationOutcomes) {
       const count = loaded.discardedSimulationOutcomes;
       setMessage(
@@ -875,8 +1265,12 @@ try {
       );
     } else if (loaded.migratedFrom) {
       setMessage(
-        `Recovered project data from ${loaded.migratedFrom}.`,
-        "success",
+        `Recovered project data from ${loaded.migratedFrom}.${
+          loaded.repairPersisted
+            ? ""
+            : " The upgraded project could not be saved; reloading may change file identities."
+        }`,
+        loaded.repairPersisted ? "success" : "error",
       );
     }
   }

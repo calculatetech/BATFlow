@@ -34,6 +34,22 @@ async function putRaw(factory, databaseName, value) {
   database.close();
 }
 
+async function getRaw(factory, databaseName) {
+  const database = await new Promise((resolve, reject) => {
+    const request = factory.open(databaseName, 1);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result);
+  });
+  const value = await new Promise((resolve, reject) => {
+    const transaction = database.transaction("projects", "readonly");
+    const request = transaction.objectStore("projects").get("current");
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  database.close();
+  return value;
+}
+
 test.afterEach(async () => {
   await resetStorageConnectionForTests();
 });
@@ -93,6 +109,50 @@ test("oversized stored outcomes are cleared without losing the project", async (
   const reloaded = await loadCurrentProject({ indexedDB });
   assert.equal(reloaded.discardedSimulationOutcomes, 0);
   assert.equal(reloaded.project.files["MAIN.BAT"].content, "choice Continue");
+});
+
+test("stored format 1 projects migrate and are rewritten as format 2", async () => {
+  const indexedDB = new IDBFactory();
+  await putRaw(indexedDB, DATABASE_NAME, {
+    formatVersion: 1,
+    project: {
+      id: "project:v1",
+      name: "Stored v1",
+      files: {
+        "AUTOEXEC.BAT": {
+          content: "exit",
+          encoding: "utf-8",
+          lineEnding: "CRLF",
+        },
+        "autoexec.bat": {
+          content: "echo duplicate",
+          encoding: "utf-8",
+          lineEnding: "CRLF",
+        },
+      },
+      metadata: {
+        notes: { "AUTOEXEC.BAT": {}, "autoexec.bat": {} },
+        lineIds: {
+          "AUTOEXEC.BAT": ["line:one"],
+          "autoexec.bat": ["line:two"],
+        },
+      },
+    },
+  });
+
+  const loaded = await loadCurrentProject({ indexedDB });
+  const fileId = loaded.project.files["AUTOEXEC.BAT"].id;
+  assert.equal(loaded.migratedFrom, "batflow-1");
+  assert.equal(loaded.project.metadata.entryFileId, fileId);
+  assert.deepEqual(loaded.project.metadata.lineIds[fileId], ["line:one"]);
+
+  const rewritten = await getRaw(indexedDB, DATABASE_NAME);
+  assert.equal(rewritten.formatVersion, 2);
+  assert.equal(rewritten.project.files["AUTOEXEC.BAT"].id, fileId);
+  assert.equal(
+    rewritten.project.files["AUTOEX~1.BAT"].content,
+    "echo duplicate",
+  );
 });
 
 for (const legacyName of LEGACY_DATABASE_NAMES) {

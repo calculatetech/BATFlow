@@ -1,16 +1,32 @@
 import { createRequire } from "node:module";
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 
 import { expect, test } from "@playwright/test";
 
 const require = createRequire(import.meta.url);
 const axePath = require.resolve("axe-core/axe.min.js");
 
+async function importFiles(page, files) {
+  await page.locator("#fileInput").setInputFiles(files);
+  await expect(page.locator("#confirmImport")).toBeEnabled();
+  await page.locator("#confirmImport").click();
+  await expect(page.locator("#importDialog")).not.toBeVisible();
+}
+
+async function createNewProject(page, name = "Untitled") {
+  await page.getByRole("button", { name: "New project" }).click();
+  await page.locator("#newProjectName").fill(name);
+  await page.getByRole("button", { name: "Create project" }).click();
+  await expect(page.locator("#newProjectDialog")).not.toBeVisible();
+}
+
 test("starts empty, exposes the managed version, and has no serious axe violations", async ({
   page,
 }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "BATFlow" })).toBeVisible();
-  await expect(page.locator("#statusText")).toContainText("v0.5.1");
+  await expect(page.locator("#statusText")).toContainText("v0.5.2");
   await expect(page.locator("#statusText")).toContainText("development");
   await expect(page.getByText("No file selected.").first()).toBeVisible();
 
@@ -30,7 +46,7 @@ test("imports, recalculates traces after editing, persists, and confirms replace
   page,
 }) => {
   await page.goto("/");
-  await page.locator("#fileInput").setInputFiles([
+  await importFiles(page, [
     {
       name: "AUTOEXEC.BAT",
       mimeType: "text/plain",
@@ -165,11 +181,9 @@ test("imports, recalculates traces after editing, persists, and confirms replace
   await page.reload();
   await expect(page.locator("#sourceView")).toHaveValue("echo replaced\nexit");
 
-  page.once("dialog", async (dialog) => {
-    expect(dialog.type()).toBe("confirm");
-    await dialog.dismiss();
-  });
   await page.getByRole("button", { name: "New project" }).click();
+  await expect(page.locator("#newProjectDialog")).toBeVisible();
+  await page.getByRole("button", { name: "Cancel" }).click();
   await expect(
     page.getByRole("button", { name: "AUTOEXEC.BAT" }),
   ).toBeVisible();
@@ -181,7 +195,7 @@ test("simulation inputs persist project-wide, export, import, and reset", async 
   const pageErrors = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
   await page.goto("/");
-  await page.locator("#fileInput").setInputFiles([
+  await importFiles(page, [
     {
       name: "MAIN.BAT",
       mimeType: "text/plain",
@@ -285,9 +299,8 @@ test("simulation inputs persist project-wide, export, import, and reset", async 
     Object.values(document.project.metadata.simulationScenario.outcomes).sort(),
   ).toEqual([1, 2]);
 
-  page.once("dialog", (dialog) => dialog.accept());
-  await page.getByRole("button", { name: "New project" }).click();
-  await page.locator("#fileInput").setInputFiles({
+  await createNewProject(page);
+  await importFiles(page, {
     name: "scenario.batflow",
     mimeType: "application/json",
     buffer: Buffer.from(content),
@@ -306,9 +319,8 @@ test("simulation inputs persist project-wide, export, import, and reset", async 
   ).toBeDisabled();
   await expect(page.locator("#appMessage")).toHaveText("Saved");
 
-  page.once("dialog", (dialog) => dialog.accept());
-  await page.getByRole("button", { name: "New project" }).click();
-  await page.locator("#fileInput").setInputFiles({
+  await createNewProject(page);
+  await importFiles(page, {
     name: "FRESH.BAT",
     mimeType: "text/plain",
     buffer: Buffer.from(
@@ -327,7 +339,7 @@ test("exports a versioned project and rejects invalid import without replacement
   page,
 }) => {
   await page.goto("/");
-  await page.locator("#fileInput").setInputFiles({
+  await importFiles(page, {
     name: "MAIN.BAT",
     mimeType: "text/plain",
     buffer: Buffer.from("echo safe\r\nexit"),
@@ -341,8 +353,8 @@ test("exports a versioned project and rejects invalid import without replacement
   let content = "";
   for await (const chunk of stream) content += chunk.toString();
   const document = JSON.parse(content);
-  expect(document.formatVersion).toBe(1);
-  expect(document.createdBy.productVersion).toBe("0.5.1");
+  expect(document.formatVersion).toBe(2);
+  expect(document.createdBy.productVersion).toBe("0.5.2");
 
   await page.locator("#fileInput").setInputFiles({
     name: "broken.batflow",
@@ -350,6 +362,7 @@ test("exports a versioned project and rejects invalid import without replacement
     buffer: Buffer.from('{"formatVersion":999,"project":{}}'),
   });
   await expect(page.locator("#appMessage")).toContainText("Import failed");
+  await page.getByRole("button", { name: "Cancel" }).click();
   await expect(page.getByRole("button", { name: "MAIN.BAT" })).toBeVisible();
 });
 
@@ -357,7 +370,7 @@ test("repaired imports preserve successful and failed save status", async ({
   page,
 }) => {
   await page.goto("/");
-  await page.locator("#fileInput").setInputFiles({
+  await importFiles(page, {
     name: "MAIN.BAT",
     mimeType: "text/plain",
     buffer: Buffer.from("echo safe\r\nexit"),
@@ -373,8 +386,7 @@ test("repaired imports preserve successful and failed save status", async ({
   repairedDocument.project.metadata.simulationScenario.outcomes.oversized = 1e31;
   content = JSON.stringify(repairedDocument);
 
-  page.once("dialog", (dialog) => dialog.accept());
-  await page.locator("#fileInput").setInputFiles({
+  await importFiles(page, {
     name: "valid.batflow",
     mimeType: "application/json",
     buffer: Buffer.from(content),
@@ -390,8 +402,7 @@ test("repaired imports preserve successful and failed save status", async ({
         throw new DOMException("Forced test failure", "UnknownError");
       };
   });
-  page.once("dialog", (dialog) => dialog.accept());
-  await page.locator("#fileInput").setInputFiles({
+  await importFiles(page, {
     name: "valid.batflow",
     mimeType: "application/json",
     buffer: Buffer.from(content),
@@ -405,11 +416,77 @@ test("repaired imports preserve successful and failed save status", async ({
   );
 });
 
+test("failed startup migration rewrite is reported as a storage error", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.evaluate(async () => {
+    const database = await new Promise((resolve, reject) => {
+      const request = globalThis.indexedDB.open("batflow", 1);
+      request.onupgradeneeded = () => {
+        if (!request.result.objectStoreNames.contains("projects")) {
+          request.result.createObjectStore("projects");
+        }
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    await new Promise((resolve, reject) => {
+      const transaction = database.transaction("projects", "readwrite");
+      transaction.objectStore("projects").put(
+        {
+          formatVersion: 1,
+          project: {
+            id: "project:startup-v1",
+            name: "Startup migration",
+            files: {
+              "AUTOEXEC.BAT": {
+                content: "exit",
+                encoding: "utf-8",
+                lineEnding: "CRLF",
+              },
+            },
+            metadata: {},
+          },
+        },
+        "current",
+      );
+      transaction.oncomplete = resolve;
+      transaction.onerror = () => reject(transaction.error);
+    });
+    database.close();
+  });
+  await page.addInitScript(() => {
+    const put = globalThis.IDBObjectStore.prototype.put;
+    globalThis.IDBObjectStore.prototype.put = function failVersion2Rewrite(
+      value,
+      key,
+    ) {
+      if (key === "current" && value?.formatVersion === 2) {
+        throw new DOMException("Forced migration failure", "UnknownError");
+      }
+      return put.call(this, value, key);
+    };
+  });
+
+  await page.reload();
+  await expect(
+    page.getByRole("button", { name: "AUTOEXEC.BAT" }),
+  ).toBeVisible();
+  await expect(page.locator("#appMessage")).toContainText(
+    "Recovered project data from batflow-1.",
+  );
+  await expect(page.locator("#appMessage")).toContainText(
+    "The upgraded project could not be saved",
+  );
+  await expect(page.locator("#appMessage")).toHaveClass(/error/);
+});
+
 test("oversized stored outcomes are cleared without losing the project", async ({
   page,
 }) => {
   await page.goto("/");
-  await page.locator("#fileInput").setInputFiles({
+  await importFiles(page, {
     name: "RECOVER.BAT",
     mimeType: "text/plain",
     buffer: Buffer.from(
@@ -458,4 +535,186 @@ test("oversized stored outcomes are cleared without losing the project", async (
   await expect(page.locator("#appMessage")).not.toContainText(
     "out-of-range simulation outcome",
   );
+});
+
+test("project naming and file lifecycle preserve explicit identity", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await createNewProject(page, "Boot: Disk");
+  await importFiles(page, [
+    {
+      name: "CONFIG.SYS",
+      mimeType: "text/plain",
+      buffer: Buffer.from("[MENU]\r\nMENUITEM=NORMAL,Normal"),
+    },
+    {
+      name: "AUTOEXEC.BAT",
+      mimeType: "text/plain",
+      buffer: Buffer.from("echo original\r\nexit"),
+    },
+  ]);
+
+  await expect(
+    page.locator('[data-file="AUTOEXEC.BAT"] .file-badge'),
+  ).toHaveText("ENTRY");
+  await page.getByRole("button", { name: /CONFIG\.SYS/ }).click();
+  await page.getByRole("button", { name: "Set as entry" }).click();
+  await expect(page.locator('[data-file="CONFIG.SYS"] .file-badge')).toHaveText(
+    "ENTRY",
+  );
+
+  await page.getByRole("button", { name: "Rename" }).click();
+  await page.locator("#renameFilePath").fill("LONG FOLDER\\CONFIG.SYS");
+  await page.getByRole("button", { name: "Rename file" }).click();
+  await expect(page.locator("#renameFileError")).toContainText("8.3");
+  await page.locator("#renameFilePath").fill("SYS\\CONFIG.SYS");
+  await page.getByRole("button", { name: "Rename file" }).click();
+  await expect(
+    page
+      .locator("[data-file]")
+      .filter({ hasText: "SYS\\CONFIG.SYS" })
+      .locator(".file-badge"),
+  ).toHaveText("ENTRY");
+  await expect(page.locator("#appMessage")).toHaveText("Saved");
+
+  await page.reload();
+  await expect(page.locator("#statusText")).toContainText("SYS\\CONFIG.SYS");
+  const fileDownloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export current BAT" }).click();
+  expect((await fileDownloadPromise).suggestedFilename()).toBe("CONFIG.SYS");
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Delete" }).click();
+  await expect(
+    page.locator('[data-file="AUTOEXEC.BAT"] .file-badge'),
+  ).toHaveText("ENTRY");
+
+  await page.locator("#projectName").fill("Renamed: Boot");
+  await page.locator("#projectName").press("Enter");
+  await expect(page.locator("#appMessage")).toHaveText("Saved");
+  await page.reload();
+  await expect(page.locator("#projectName")).toHaveValue("Renamed: Boot");
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export project" }).click();
+  expect((await downloadPromise).suggestedFilename()).toBe(
+    "Renamed_ Boot.batflow",
+  );
+
+  await page.locator("#fileInput").setInputFiles({
+    name: "Long Name.BAT",
+    mimeType: "text/plain",
+    buffer: Buffer.from("exit"),
+  });
+  await expect(page.locator("#importPreview")).toContainText(
+    "imported unchanged",
+  );
+  await page.locator("#confirmImport").click();
+  await expect(page.locator('[data-file="Long Name.BAT"]')).toBeVisible();
+  await expect(
+    page.locator('[data-file="Long Name.BAT"] .file-warning'),
+  ).toBeVisible();
+});
+
+test("import preflight handles folder roots, unsupported files, and collisions", async ({
+  page,
+}, testInfo) => {
+  const folder = testInfo.outputPath("BOOTDISK");
+  await mkdir(join(folder, "DOS"), { recursive: true });
+  await mkdir(join(folder, "Long Folder"), { recursive: true });
+  await writeFile(join(folder, "AUTOEXEC.BAT"), "echo folder\r\nexit");
+  await writeFile(join(folder, "DOS", "SETUP.BAT"), "exit");
+  await writeFile(join(folder, "Long Folder", "Long Name.BAT"), "exit");
+  await writeFile(join(folder, "README.PDF"), "unsupported");
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Import" }).click();
+  await page.locator("#folderInput").setInputFiles(folder);
+  await expect(page.locator("#confirmImport")).toBeDisabled();
+  await page
+    .getByLabel("Keep selected folder as the top-level directory")
+    .check();
+  await expect(page.locator("#importSummary")).toContainText(
+    "1 unsupported file",
+  );
+  await expect(page.locator("#importPreview")).toContainText(
+    "BOOTDISK/AUTOEXEC.BAT",
+  );
+  await page.locator("#confirmImport").click();
+  await expect(
+    page.locator('[data-file="BOOTDISK/AUTOEXEC.BAT"]'),
+  ).toBeVisible();
+
+  await createNewProject(page, "Root-stripped");
+  await page.getByRole("button", { name: "Import" }).click();
+  await page.locator("#folderInput").setInputFiles(folder);
+  await page.getByLabel("Use folder contents as project root").check();
+  await page.locator("#confirmImport").click();
+  await expect(page.locator('[data-file="AUTOEXEC.BAT"]')).toBeVisible();
+  await expect(page.locator('[data-file="DOS/SETUP.BAT"]')).toBeVisible();
+  await expect(
+    page.locator('[data-file="Long Folder/Long Name.BAT"]'),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Import" }).click();
+  await page.locator("#folderInput").setInputFiles(folder);
+  await page.getByLabel("Use folder contents as project root").check();
+  await page
+    .getByLabel("Collision action for AUTOEXEC.BAT")
+    .selectOption("skip");
+  await page
+    .getByLabel("Collision action for DOS/SETUP.BAT")
+    .selectOption("skip");
+  await page
+    .getByLabel("Collision action for Long Folder/Long Name.BAT")
+    .selectOption("keep");
+  await expect(
+    page.getByLabel("Keep-both destination for Long Folder/Long Name.BAT"),
+  ).toHaveValue("Long Folder/LONGNA~1.BAT");
+  await expect(page.locator("#confirmImport")).toBeEnabled();
+  await page.locator("#confirmImport").click();
+  await expect(
+    page.locator('[data-file="Long Folder/LONGNA~1.BAT"]'),
+  ).toBeVisible();
+
+  await page.locator("#fileInput").setInputFiles({
+    name: "autoexec.bat",
+    mimeType: "text/plain",
+    buffer: Buffer.from("echo collision\r\nexit"),
+  });
+  await expect(page.locator("[data-import-action]")).toBeVisible();
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await page.getByRole("tab", { name: "Source" }).click();
+  await expect(page.locator("#sourceView")).toHaveValue(/echo folder/);
+
+  await page.locator("#fileInput").setInputFiles({
+    name: "autoexec.bat",
+    mimeType: "text/plain",
+    buffer: Buffer.from("echo collision\r\nexit"),
+  });
+  await page.locator("[data-import-action]").selectOption("keep");
+  await expect(page.locator("[data-keep-path]")).toHaveValue("AUTOEX~1.BAT");
+  await page.locator("#confirmImport").click();
+  await expect(page.locator('[data-file="AUTOEX~1.BAT"]')).toBeVisible();
+
+  await page.locator("#fileInput").setInputFiles({
+    name: "AUTOEXEC.BAT",
+    mimeType: "text/plain",
+    buffer: Buffer.from("echo replacement\r\nexit"),
+  });
+  await page.locator("[data-import-action]").selectOption("skip");
+  await page.locator("#confirmImport").click();
+  await page.getByRole("button", { name: /AUTOEXEC\.BAT/ }).click();
+  await expect(page.locator("#sourceView")).toHaveValue(/echo folder/);
+
+  await page.locator("#fileInput").setInputFiles({
+    name: "AUTOEXEC.BAT",
+    mimeType: "text/plain",
+    buffer: Buffer.from("echo replacement\r\nexit"),
+  });
+  await page.locator("[data-import-action]").selectOption("replace");
+  await page.locator("#confirmImport").click();
+  await expect(page.locator("#sourceView")).toHaveValue(/echo replacement/);
+  await expect(
+    page.locator('[data-file="AUTOEXEC.BAT"] .file-badge'),
+  ).toHaveText("ENTRY");
 });

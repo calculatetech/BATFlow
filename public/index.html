@@ -4,23 +4,17 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>BATFlow — DOS 7.1 Visual Batch Editor</title>
-    <link rel="stylesheet" href="styles.css?v=0.5.1-dev" />
+    <link rel="stylesheet" href="styles.css?v=0.5.2-dev" />
   </head>
   <body>
     <header class="topbar">
       <div>
         <h1>BATFlow</h1>
-        <span>Win98 MS-DOS 7.1 visual batch editor · v0.5.1 · development</span>
+        <span>Win98 MS-DOS 7.1 visual batch editor · v0.5.2 · development</span>
       </div>
       <div class="toolbar">
         <button id="newProject" type="button">New project</button>
-        <label class="button"
-          >Import files<input
-            id="fileInput"
-            type="file"
-            multiple
-            accept=".bat,.sys,.txt,.batflow"
-        /></label>
+        <button id="openImport" type="button">Import</button>
         <button id="exportProject" type="button">Export project</button>
         <button id="exportBat" type="button">Export current BAT</button>
       </div>
@@ -29,8 +23,20 @@
     <main class="workspace">
       <aside class="sidebar left" aria-label="Project and simulation">
         <section>
+          <h2>Project</h2>
+          <label for="projectName">Project name</label>
+          <input id="projectName" type="text" />
+        </section>
+        <section>
           <h2>Project files</h2>
           <div id="fileList" class="file-list"></div>
+          <div class="file-actions button-row">
+            <button id="renameFile" type="button" disabled>Rename</button>
+            <button id="deleteFile" type="button" disabled>Delete</button>
+            <button id="setEntryFile" type="button" disabled>
+              Set as entry
+            </button>
+          </div>
         </section>
         <section class="simulation-panel">
           <h2>Simulation</h2>
@@ -122,6 +128,76 @@
       </aside>
     </main>
 
-    <script type="module" src="app.js?v=0.5.1-dev"></script>
+    <dialog id="newProjectDialog">
+      <form id="newProjectForm">
+        <h2>New project</h2>
+        <p id="newProjectWarning" class="dialog-warning"></p>
+        <label for="newProjectName">Project name</label>
+        <input id="newProjectName" type="text" required value="Untitled" />
+        <div class="dialog-actions">
+          <button id="cancelNewProject" type="button">Cancel</button>
+          <button type="submit">Create project</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="renameFileDialog">
+      <form id="renameFileForm">
+        <h2>Rename project file</h2>
+        <label for="renameFilePath">Relative DOS path</label>
+        <input id="renameFilePath" type="text" required />
+        <p id="renameFileError" class="dialog-warning"></p>
+        <div class="dialog-actions">
+          <button id="cancelRenameFile" type="button">Cancel</button>
+          <button type="submit">Rename file</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="importDialog" class="import-dialog">
+      <form id="importForm">
+        <h2>Import into project</h2>
+        <div class="button-row">
+          <button id="browseFiles" type="button">Browse files</button>
+          <button id="browseFolder" type="button">Browse folder</button>
+        </div>
+        <input
+          id="fileInput"
+          class="hidden"
+          type="file"
+          multiple
+          accept=".bat,.sys,.txt,.batflow"
+        />
+        <input
+          id="folderInput"
+          class="hidden"
+          type="file"
+          multiple
+          webkitdirectory
+        />
+        <fieldset id="folderRootChoice" class="hidden">
+          <legend>Selected folder placement</legend>
+          <label
+            ><input type="radio" name="folderRoot" value="strip" /> Use folder
+            contents as project root</label
+          >
+          <label
+            ><input type="radio" name="folderRoot" value="keep" /> Keep selected
+            folder as the top-level directory</label
+          >
+        </fieldset>
+        <div id="importSummary" class="import-summary">
+          Browse for source files, a source folder, or one BATFlow project.
+        </div>
+        <div id="importPreview" class="import-preview"></div>
+        <p id="importError" class="dialog-warning"></p>
+        <div class="dialog-actions">
+          <button id="cancelImport" type="button">Cancel</button>
+          <button id="confirmImport" type="submit" disabled>Import</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script type="module" src="app.js?v=0.5.2-dev"></script>
   </body>
 </html>
