@@ -3,7 +3,7 @@ import {
   norm,
   parseBatch,
   resolveBatchTarget,
-} from "./lib/batch-core.js?v=0.5.0-dev";
+} from "./lib/batch-core.js?v=0.5.1-dev";
 import {
   PRODUCT_VERSION,
   ProjectFormatError,
@@ -15,15 +15,16 @@ import {
   importProjectDocument,
   serializeProject,
   updateFileContent,
-} from "./lib/project-format.js?v=0.5.0-dev";
+  updateProjectSimulationScenario,
+} from "./lib/project-format.js?v=0.5.1-dev";
 import {
   loadCurrentProject,
   saveCurrentProject,
-} from "./lib/storage.js?v=0.5.0-dev";
+} from "./lib/storage.js?v=0.5.1-dev";
 import {
   collectOutcomeRequests,
   simulate,
-} from "./lib/simulation.js?v=0.5.0-dev";
+} from "./lib/simulation.js?v=0.5.1-dev";
 
 const $ = (id) => document.getElementById(id);
 const state = {
@@ -35,7 +36,6 @@ const state = {
   trace: [],
   traceStop: "",
   traceEnabled: true,
-  simValues: { variables: {}, paths: {}, outcomes: {} },
   saveTimer: null,
   saveChain: Promise.resolve(),
   message: "",
@@ -72,6 +72,31 @@ function projectHasWork() {
   return Object.keys(state.project.files).length > 0;
 }
 
+function storedSimulationScenario() {
+  return state.project.metadata.simulationScenario;
+}
+
+function currentSimulationScenario() {
+  const scenario = storedSimulationScenario();
+  const configDefault = state.parsed?.configInfo?.menuDefault;
+  if (!configDefault || Object.hasOwn(scenario.variables, "config")) {
+    return scenario;
+  }
+  return {
+    ...scenario,
+    variables: {
+      ...scenario.variables,
+      config: configDefault,
+    },
+  };
+}
+
+function scenarioHasValues(scenario = storedSimulationScenario()) {
+  return ["variables", "paths", "outcomes"].some(
+    (key) => Object.keys(scenario[key]).length > 0,
+  );
+}
+
 function parseCurrent() {
   if (!state.currentFile || !state.project.files[state.currentFile]) {
     state.currentFile = null;
@@ -86,10 +111,6 @@ function parseCurrent() {
     lineIds: state.project.metadata.lineIds[state.currentFile],
     projectFiles: state.project.files,
   });
-  const configDefault = state.parsed.configInfo?.menuDefault;
-  if (configDefault && !Object.hasOwn(state.simValues.variables, "config")) {
-    state.simValues.variables.config = configDefault;
-  }
   if (
     state.selectedId &&
     !state.parsed.blocks.some((block) => block.id === state.selectedId)
@@ -122,7 +143,7 @@ function recalculateTrace() {
     state.traceStop = state.traceEnabled ? "" : "Trace disabled";
     return;
   }
-  const result = simulate(state.parsed, state.simValues, {
+  const result = simulate(state.parsed, currentSimulationScenario(), {
     projectFiles: state.project.files,
   });
   state.trace = result.trace;
@@ -414,16 +435,18 @@ function renderLabels() {
 }
 
 function renderSimulationInputs() {
+  $("resetSimulation").disabled = !scenarioHasValues();
   if (!state.parsed) {
     $("simulationInputs").innerHTML =
       '<div class="empty-state">No file selected.</div>';
     $("traceSummary").textContent = "";
     return;
   }
+  const scenario = currentSimulationScenario();
   const variables = state.parsed.variables
     .map((item) => {
       const key = norm(item.name);
-      const saved = state.simValues.variables[key] || "";
+      const saved = scenario.variables[key] || "";
       if (item.values.length) {
         const known = item.values.includes(saved);
         const custom = Boolean(saved && !known);
@@ -453,7 +476,7 @@ function renderSimulationInputs() {
   const paths = state.parsed.paths
     .map((item, index) => {
       const key = normalizeDosPath(item);
-      const saved = state.simValues.paths[key] || "unknown";
+      const saved = scenario.paths[key] || "unknown";
       return (
         `<div class="sim-input"><label for="path-${index}">${escapeHtml(item)}</label>` +
         `<select id="path-${index}" data-path="${escapeAttr(key)}">` +
@@ -469,7 +492,7 @@ function renderSimulationInputs() {
         `<div class="sim-input"><label for="outcome-${index}">Line ${request.line + 1}: ` +
         `${escapeHtml(request.source)} ERRORLEVEL</label><input id="outcome-${index}" ` +
         `type="number" min="0" step="1" data-outcome="${escapeAttr(request.key)}" ` +
-        `value="${escapeAttr(state.simValues.outcomes[request.key] ?? "")}" ` +
+        `value="${escapeAttr(scenario.outcomes[request.key] ?? "")}" ` +
         'placeholder="required when reached"></div>',
     )
     .join("");
@@ -483,6 +506,7 @@ function renderSimulationInputs() {
     renderDiagram();
     renderTraceView();
     updateTraceSummary();
+    queueSave();
   };
   document.querySelectorAll("select[data-var]").forEach((select) => {
     select.onchange = () => {
@@ -504,9 +528,10 @@ function renderSimulationInputs() {
 }
 
 function collectSimulationValues() {
-  const variables = {};
-  const paths = {};
-  const outcomes = {};
+  const current = storedSimulationScenario();
+  const variables = { ...current.variables };
+  const paths = { ...current.paths };
+  const outcomes = { ...current.outcomes };
   document.querySelectorAll("[data-var]").forEach((control) => {
     let value = control.value;
     if (control.tagName === "SELECT" && value === "__custom") {
@@ -516,16 +541,30 @@ function collectSimulationValues() {
     }
     if (value && value !== "__custom") {
       variables[control.dataset.var] = value;
+    } else {
+      delete variables[control.dataset.var];
     }
   });
   document.querySelectorAll("[data-path]").forEach((select) => {
-    paths[select.dataset.path] = select.value;
+    if (select.value === "unknown") {
+      delete paths[select.dataset.path];
+    } else {
+      paths[select.dataset.path] = select.value;
+    }
   });
   document.querySelectorAll("[data-outcome]").forEach((input) => {
-    if (input.value !== "")
+    if (input.value !== "") {
       outcomes[input.dataset.outcome] = Number(input.value);
+    } else {
+      delete outcomes[input.dataset.outcome];
+    }
   });
-  state.simValues = { variables, paths, outcomes };
+  state.project = updateProjectSimulationScenario(state.project, {
+    variables,
+    paths,
+    outcomes,
+  });
+  $("resetSimulation").disabled = !scenarioHasValues();
 }
 
 function updateTraceSummary() {
@@ -668,7 +707,6 @@ $("newProject").onclick = async () => {
   state.project = createProject();
   state.currentFile = null;
   state.selectedId = null;
-  state.simValues = { variables: {}, paths: {}, outcomes: {} };
   render();
   await queueSave({ immediate: true });
 };
@@ -719,6 +757,22 @@ $("traceToggle").onclick = () => {
   renderDiagram();
   renderTraceView();
   updateTraceSummary();
+};
+
+$("resetSimulation").onclick = async () => {
+  if (
+    !scenarioHasValues() ||
+    !window.confirm("Reset all simulation inputs for this project?")
+  ) {
+    return;
+  }
+  state.project = updateProjectSimulationScenario(state.project, {
+    variables: {},
+    paths: {},
+    outcomes: {},
+  });
+  render();
+  await queueSave({ immediate: true });
 };
 
 document.querySelectorAll("[data-view]").forEach((button) => {

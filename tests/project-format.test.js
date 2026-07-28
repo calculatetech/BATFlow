@@ -12,6 +12,7 @@ import {
   importProjectDocument,
   serializeProject,
   updateFileContent,
+  updateProjectSimulationScenario,
 } from "../public/lib/project-format.js";
 
 test("versioned project documents round-trip without losing durable metadata", () => {
@@ -26,7 +27,7 @@ test("versioned project documents round-trip without losing durable metadata", (
 
   const document = JSON.parse(serializeProject(project));
   assert.equal(document.formatVersion, PROJECT_FORMAT_VERSION);
-  assert.equal(document.createdBy.productVersion, "0.5.0");
+  assert.equal(document.createdBy.productVersion, "0.5.1");
   assert.equal(document.interpreterProfile, "msdos-7.1-command.com");
 
   const imported = importProjectDocument(document);
@@ -34,6 +35,94 @@ test("versioned project documents round-trip without losing durable metadata", (
   assert.equal(
     imported.project.metadata.notes["AUTOEXEC.BAT"]["line:1"],
     "Keep this note",
+  );
+});
+
+test("simulation scenarios normalize and round-trip with the project", () => {
+  const original = createProject("Scenario");
+  const updated = updateProjectSimulationScenario(original, {
+    variables: { CONFIG: "NORMAL", Mode: "Safe" },
+    paths: { "C:/TOOLS/APP.EXE": "yes" },
+    outcomes: { "line:choice": 2 },
+  });
+
+  assert.deepEqual(original.metadata.simulationScenario, {
+    variables: {},
+    paths: {},
+    outcomes: {},
+  });
+  assert.deepEqual(updated.metadata.simulationScenario, {
+    variables: { config: "NORMAL", mode: "Safe" },
+    paths: { "c:\\tools\\app.exe": "yes" },
+    outcomes: { "line:choice": 2 },
+  });
+
+  const imported = importProjectDocument(JSON.parse(serializeProject(updated)));
+  assert.deepEqual(
+    imported.project.metadata.simulationScenario,
+    updated.metadata.simulationScenario,
+  );
+});
+
+test("missing scenarios default safely and malformed scenarios are rejected", () => {
+  const imported = importProjectDocument({
+    formatVersion: PROJECT_FORMAT_VERSION,
+    project: {
+      id: "project:old-v1",
+      name: "Old version 1",
+      files: {},
+      metadata: { notes: {}, lineIds: {} },
+    },
+  });
+  assert.deepEqual(imported.project.metadata.simulationScenario, {
+    variables: {},
+    paths: {},
+    outcomes: {},
+  });
+
+  assert.throws(
+    () =>
+      updateProjectSimulationScenario(createProject(), {
+        variables: { mode: 1 },
+        paths: {},
+        outcomes: {},
+      }),
+    /Simulation variable/,
+  );
+  assert.throws(
+    () =>
+      updateProjectSimulationScenario(createProject(), {
+        variables: {},
+        paths: { "C:\\BAD": "unknown" },
+        outcomes: {},
+      }),
+    /Simulation path/,
+  );
+  assert.throws(
+    () =>
+      updateProjectSimulationScenario(createProject(), {
+        variables: {},
+        paths: {},
+        outcomes: { choice: -1 },
+      }),
+    /Simulation outcomes/,
+  );
+  assert.throws(
+    () =>
+      importProjectDocument({
+        formatVersion: PROJECT_FORMAT_VERSION,
+        project: {
+          id: "project:malformed",
+          name: "Malformed scenario",
+          files: {},
+          metadata: {
+            notes: {},
+            lineIds: {},
+            simulationScenario: { variables: null },
+          },
+        },
+      }),
+    /Simulation variables/,
   );
 });
 

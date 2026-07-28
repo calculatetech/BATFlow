@@ -10,7 +10,11 @@ import {
   resetStorageConnectionForTests,
   saveCurrentProject,
 } from "../public/lib/storage.js";
-import { addTextFile, createProject } from "../public/lib/project-format.js";
+import {
+  addTextFile,
+  createProject,
+  updateProjectSimulationScenario,
+} from "../public/lib/project-format.js";
 
 async function putRaw(factory, databaseName, value) {
   const database = await new Promise((resolve, reject) => {
@@ -35,16 +39,22 @@ test.afterEach(async () => {
 
 test("current projects are stored in the stable database as versioned documents", async () => {
   const indexedDB = new IDBFactory();
-  const expected = addTextFile(
-    createProject("Stored"),
-    "MAIN.BAT",
-    "echo saved",
-  );
+  let expected = addTextFile(createProject("Stored"), "MAIN.BAT", "echo saved");
+  expected = updateProjectSimulationScenario(expected, {
+    variables: { mode: "SAFE" },
+    paths: { "C:\\TOOLS": "yes" },
+    outcomes: { "line:choice": 2 },
+  });
   await saveCurrentProject(expected, { indexedDB });
 
   const loaded = await loadCurrentProject({ indexedDB });
   assert.equal(loaded.project.name, "Stored");
   assert.equal(loaded.project.files["MAIN.BAT"].content, "echo saved");
+  assert.deepEqual(loaded.project.metadata.simulationScenario, {
+    variables: { mode: "SAFE" },
+    paths: { "c:\\tools": "yes" },
+    outcomes: { "line:choice": 2 },
+  });
   assert.equal(loaded.migratedFrom, null);
   assert.equal(
     (await indexedDB.databases()).some((item) => item.name === DATABASE_NAME),

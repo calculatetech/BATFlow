@@ -2,12 +2,14 @@ import {
   detectLineEnding,
   joinSource,
   makeOpaqueId,
+  norm,
+  normalizeDosPath,
   reconcileLineIds,
   splitSource,
-} from "./batch-core.js?v=0.5.0-dev";
+} from "./batch-core.js?v=0.5.1-dev";
 
 export const PRODUCT_NAME = "BATFlow";
-export const PRODUCT_VERSION = "0.5.0";
+export const PRODUCT_VERSION = "0.5.1";
 export const PROJECT_FORMAT_VERSION = 1;
 export const INTERPRETER_PROFILE = "msdos-7.1-command.com";
 
@@ -62,6 +64,70 @@ function normalizeFileRecord(record, path) {
   };
 }
 
+export function createSimulationScenario() {
+  return {
+    variables: {},
+    paths: {},
+    outcomes: {},
+  };
+}
+
+function normalizeSimulationScenario(value) {
+  const scenario = safeObject(value, "Simulation scenario");
+  const variableValues = safeObject(
+    scenario.variables === undefined ? {} : scenario.variables,
+    "Simulation variables",
+  );
+  const pathValues = safeObject(
+    scenario.paths === undefined ? {} : scenario.paths,
+    "Simulation paths",
+  );
+  const outcomeValues = safeObject(
+    scenario.outcomes === undefined ? {} : scenario.outcomes,
+    "Simulation outcomes",
+  );
+  const variables = {};
+  const paths = {};
+  const outcomes = {};
+
+  for (const [name, value] of Object.entries(variableValues)) {
+    const key = norm(name);
+    if (!key || typeof value !== "string") {
+      throw new ProjectFormatError(
+        "Simulation variable names must be non-empty and values must be text.",
+      );
+    }
+    if (value) variables[key] = value;
+  }
+
+  for (const [path, value] of Object.entries(pathValues)) {
+    const key = normalizeDosPath(path).trim();
+    if (!key || !["yes", "no"].includes(value)) {
+      throw new ProjectFormatError(
+        'Simulation path values must be either "yes" or "no".',
+      );
+    }
+    paths[key] = value;
+  }
+
+  for (const [key, value] of Object.entries(outcomeValues)) {
+    const normalizedKey = key.trim();
+    if (
+      !normalizedKey ||
+      typeof value !== "number" ||
+      !Number.isInteger(value) ||
+      value < 0
+    ) {
+      throw new ProjectFormatError(
+        "Simulation outcomes must be non-negative integers.",
+      );
+    }
+    outcomes[normalizedKey] = value;
+  }
+
+  return { variables, paths, outcomes };
+}
+
 function ensureMetadata(project) {
   project.metadata = safeObject(project.metadata || {}, "Project metadata");
   project.metadata.notes = safeObject(
@@ -71,6 +137,11 @@ function ensureMetadata(project) {
   project.metadata.lineIds = safeObject(
     project.metadata.lineIds || {},
     "Project line IDs",
+  );
+  project.metadata.simulationScenario = normalizeSimulationScenario(
+    project.metadata.simulationScenario === undefined
+      ? createSimulationScenario()
+      : project.metadata.simulationScenario,
   );
 
   for (const [path, file] of Object.entries(project.files)) {
@@ -128,8 +199,15 @@ export function createProject(name = "Untitled") {
     metadata: {
       notes: {},
       lineIds: {},
+      simulationScenario: createSimulationScenario(),
     },
   });
+}
+
+export function updateProjectSimulationScenario(projectValue, scenario) {
+  const project = validateProject(projectValue);
+  project.metadata.simulationScenario = normalizeSimulationScenario(scenario);
+  return validateProject(project);
 }
 
 export function importProjectDocument(value) {
@@ -259,7 +337,7 @@ export function decodeUtf8(bytes) {
     return decoded.replace(/^\uFEFF/, "");
   } catch {
     throw new ProjectFormatError(
-      "The selected file is not valid UTF-8. BATFlow 0.5.0 does not guess DOS code pages.",
+      "The selected file is not valid UTF-8. BATFlow 0.5.1 does not guess DOS code pages.",
     );
   }
 }

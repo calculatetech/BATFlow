@@ -10,11 +10,11 @@ const read = (path) => readFileSync(join(root, path), "utf8");
 
 test("the managed product version is consistently declared", () => {
   const manifest = JSON.parse(read("package.json"));
-  assert.equal(manifest.version, "0.5.0");
-  assert.match(read("README.md"), /development baseline is `0\.5\.0`/);
+  assert.equal(manifest.version, "0.5.1");
+  assert.match(read("README.md"), /development baseline is `0\.5\.1`/);
   assert.match(
     read("docs/ROADMAP.md"),
-    /Current baseline: \*\*0\.5\.0 development\*\*/,
+    /Current baseline: \*\*0\.5\.1 development\*\*/,
   );
 });
 
@@ -69,15 +69,15 @@ test("the public UI has no private example loader or in-app roadmap", () => {
 
 test("the public HTML references only present runtime assets", () => {
   const html = read("public/index.html");
-  assert.match(html, /href="styles\.css\?v=0\.5\.0-dev"/);
-  assert.match(html, /src="app\.js\?v=0\.5\.0-dev"/);
+  assert.match(html, /href="styles\.css\?v=0\.5\.1-dev"/);
+  assert.match(html, /src="app\.js\?v=0\.5\.1-dev"/);
   for (const module of [
     "public/app.js",
     "public/lib/project-format.js",
     "public/lib/simulation.js",
     "public/lib/storage.js",
   ]) {
-    assert.match(read(module), /\.js\?v=0\.5\.0-dev/);
+    assert.match(read(module), /\.js\?v=0\.5\.1-dev/);
   }
   assert.doesNotThrow(() => read("public/styles.css"));
   assert.doesNotThrow(() => read("public/app.js"));

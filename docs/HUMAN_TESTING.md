@@ -19,6 +19,11 @@ deployment bundle. Keep screenshots and detailed logs outside Git.
   private fixtures; confirm those files are not present in the deployment
   bundle.
 - Exercise both sides of CHOICE/ERRORLEVEL and path-existence branches.
+- Change simulation variables, paths, and outcomes; switch files and reload
+  after Saved, then confirm the values remain project-scoped and intact.
+- Export and reimport the project; confirm simulation inputs round-trip. Reset
+  inputs, approve the confirmation, and confirm stored values clear while a
+  CONFIG.SYS default may be derived again.
 - Edit, insert, duplicate, and delete source lines; confirm the diagram and
   trace update immediately and notes stay on the intended command.
 - Reload after the visible `Saved` state and confirm work persists.

@@ -2,7 +2,7 @@ import {
   exportProjectDocument,
   importProjectDocument,
   validateProject,
-} from "./project-format.js?v=0.5.0-dev";
+} from "./project-format.js?v=0.5.1-dev";
 
 export const DATABASE_NAME = "batflow";
 export const DATABASE_VERSION = 1;

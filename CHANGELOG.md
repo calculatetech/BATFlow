@@ -4,6 +4,21 @@ BATFlow uses Semantic Versioning for managed development milestones. Formal Git
 tags and GitHub releases begin at `1.0.0`. The project-format, browser-storage,
 and interpreter-profile versions are managed separately.
 
+## 0.5.1 — simulation-state hardening
+
+### Added
+
+- One validated, project-scoped active simulation scenario.
+- Durable variable, path-existence, and ERRORLEVEL inputs across file switches,
+  browser reloads, storage, and `.batflow` export/import.
+- A confirmed Reset inputs action for clearing the project scenario.
+
+### Changed
+
+- Simulation input edits now participate in the visible autosave lifecycle.
+- CONFIG.SYS defaults remain derived until the user interacts with simulation
+  inputs.
+
 ## 0.5.0 — development baseline
 
 This is the first version managed in Git. Earlier development used the name
