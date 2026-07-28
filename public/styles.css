@@ -78,6 +78,29 @@ button:hover,
   flex-wrap: wrap;
   justify-content: flex-end;
 }
+.diagnostics-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.diagnostics-button #diagnosticsBadge {
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 1px 6px;
+  color: inherit;
+  font-size: 10px;
+  font-weight: 700;
+}
+.diagnostics-button.healthy {
+  color: var(--success);
+}
+.diagnostics-button.saving,
+.diagnostics-button.attention {
+  color: var(--warning);
+}
+.diagnostics-button.error {
+  color: var(--danger);
+}
 .workspace {
   display: grid;
   grid-template-columns: 260px minmax(480px, 1fr) 330px;
@@ -247,6 +270,104 @@ dialog h2 {
 }
 .import-dialog {
   width: min(760px, calc(100vw - 32px));
+}
+.diagnostics-dialog {
+  width: min(760px, calc(100vw - 32px));
+}
+.diagnostics-dialog > section {
+  display: grid;
+  gap: 12px;
+}
+.diagnostics-dialog h3 {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.diagnostics-overall {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  border-radius: 6px;
+}
+.diagnostics-overall.healthy {
+  border-left-color: var(--success);
+}
+.diagnostics-overall.saving,
+.diagnostics-overall.attention {
+  border-left-color: var(--warning);
+}
+.diagnostics-overall.error {
+  border-left-color: var(--danger);
+}
+.diagnostics-overall ul {
+  margin: 0;
+  padding-left: 20px;
+}
+.diagnostics-overall li span {
+  text-transform: capitalize;
+}
+.diagnostics-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+.diagnostics-summary > div {
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.diagnostics-summary dt {
+  color: var(--muted);
+  font-size: 11px;
+}
+.diagnostics-summary dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+}
+.diagnostics-events {
+  display: grid;
+  max-height: 300px;
+  gap: 8px;
+  overflow: auto;
+}
+.diagnostic-event {
+  display: grid;
+  gap: 5px;
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+}
+.diagnostic-event.warning {
+  border-left-color: var(--warning);
+}
+.diagnostic-event.error {
+  border-left-color: var(--danger);
+}
+.diagnostic-event > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.diagnostic-event code {
+  color: var(--muted);
+}
+.diagnostic-event details summary {
+  cursor: pointer;
+}
+.diagnostic-event pre {
+  max-height: 180px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 #folderRootChoice {
   display: grid;
@@ -515,6 +636,9 @@ select:focus-visible {
   }
   .toolbar {
     justify-content: flex-start;
+  }
+  .diagnostics-summary {
+    grid-template-columns: 1fr;
   }
 }
 

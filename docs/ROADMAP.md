@@ -2,7 +2,7 @@
 
 Last updated: July 28, 2026
 
-Current baseline: **0.5.2 development**
+Current baseline: **0.5.3 development**
 
 BATFlow, formerly called `passes`, is being converted from an unversioned
 prototype into a managed and genuinely usable application. The detailed audit
@@ -82,9 +82,17 @@ that BATFlow is stable, complete, or ready for formal release.
 - Advanced `.batflow` project format to version 2 with tested version 1
   migration while retaining IndexedDB schema version 1.
 
+## Completed: 0.5.3 structured diagnostics
+
+- Added a persistent-in-tab health badge and diagnostics dialog for runtime,
+  storage, save, migration, recovery, and import state.
+- Added bounded session history, last-observed-save state, stable diagnostic
+  codes, and local technical details.
+- Added a privacy-safe diagnostics export that contains operational metadata
+  and counts without project content or identifiers.
+
 ## Priority 1: 0.5.x usability hardening
 
-- Structured diagnostics beyond the current save and import status.
 - Broader browser compatibility, cache behavior, and offline behavior.
 - Terminal-newline presentation cleanup and additional keyboard ergonomics.
 

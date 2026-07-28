@@ -2,11 +2,11 @@
 
 ## Interpreter boundary
 
-BATFlow 0.5.2 models the Win98 MS-DOS 7.1 `COMMAND.COM` profile. Simulation is
+BATFlow 0.5.3 models the Win98 MS-DOS 7.1 `COMMAND.COM` profile. Simulation is
 an explanatory control-flow model; it does not execute imported commands and
 is not a byte-for-byte interpreter.
 
-The 0.5.2 trace is intentionally single-file. `CALL` is recorded and returns to
+The 0.5.3 trace is intentionally single-file. `CALL` is recorded and returns to
 the following line; direct batch invocation records a transfer and stops.
 Cross-file trace expansion remains planned for 0.6.0.
 

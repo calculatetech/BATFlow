@@ -21,14 +21,39 @@ async function createNewProject(page, name = "Untitled") {
   await expect(page.locator("#newProjectDialog")).not.toBeVisible();
 }
 
+async function downloadJson(page, buttonName) {
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: buttonName }).click();
+  const download = await downloadPromise;
+  const stream = await download.createReadStream();
+  let content = "";
+  for await (const chunk of stream) content += chunk.toString();
+  return { content, download, document: JSON.parse(content) };
+}
+
 test("starts empty, exposes the managed version, and has no serious axe violations", async ({
   page,
 }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "BATFlow" })).toBeVisible();
-  await expect(page.locator("#statusText")).toContainText("v0.5.2");
+  await expect(page.locator("#statusText")).toContainText("v0.5.3");
   await expect(page.locator("#statusText")).toContainText("development");
   await expect(page.getByText("No file selected.").first()).toBeVisible();
+  await expect(page.locator("#diagnosticsBadge")).toHaveText("Healthy");
+  await page.getByRole("button", { name: "Diagnostics: Healthy" }).click();
+  await expect(page.getByRole("dialog", { name: "Diagnostics" })).toBeVisible();
+  await expect(page.locator("#diagnosticsOverall")).toContainText("Healthy");
+  await expect(page.locator("#diagnosticsSaveState")).toHaveText("Idle");
+  await expect(page.locator("#diagnosticsLastSave")).toHaveText(
+    "Not observed this session",
+  );
+  await expect(page.locator("#diagnosticsVersions")).toContainText("0.5.3");
+  await expect(page.locator("#diagnosticsVersions")).toContainText(
+    "Project format",
+  );
+  await expect(page.locator("#diagnosticsVersions")).toContainText(
+    "msdos-7.1-command.com",
+  );
 
   await page.addScriptTag({ path: axePath });
   const violations = await page.evaluate(async () => {
@@ -40,7 +65,30 @@ test("starts empty, exposes the managed version, and has no serious axe violatio
     );
   });
   expect(violations).toEqual([]);
+  await page.getByRole("button", { name: "Close" }).click();
 });
+
+for (const asset of ["app.js", "lib/diagnostics.js"]) {
+  test(`reports a startup failure when ${asset} cannot load`, async ({
+    page,
+  }) => {
+    await page.route(`**/${asset}?*`, (route) => route.abort());
+    await page.goto("/");
+
+    await expect(page.locator("#diagnosticsBadge")).toHaveText("Error");
+    await page.getByRole("button", { name: "Diagnostics: Error" }).click();
+    await expect(
+      page.getByRole("dialog", { name: "Diagnostics" }),
+    ).toBeVisible();
+    await expect(page.locator("#diagnosticsOverall")).toContainText(
+      "BATFlow could not start",
+    );
+    await expect(page.locator("#diagnosticsEvents")).toContainText(
+      "runtime.asset.failed",
+    );
+    await page.getByRole("button", { name: "Close" }).click();
+  });
+}
 
 test("imports, recalculates traces after editing, persists, and confirms replacement", async ({
   page,
@@ -354,7 +402,7 @@ test("exports a versioned project and rejects invalid import without replacement
   for await (const chunk of stream) content += chunk.toString();
   const document = JSON.parse(content);
   expect(document.formatVersion).toBe(2);
-  expect(document.createdBy.productVersion).toBe("0.5.2");
+  expect(document.createdBy.productVersion).toBe("0.5.3");
 
   await page.locator("#fileInput").setInputFiles({
     name: "broken.batflow",
@@ -413,6 +461,163 @@ test("repaired imports preserve successful and failed save status", async ({
   );
   await expect(page.locator("#appMessage")).toContainText(
     "Save failed: Forced test failure",
+  );
+});
+
+test("diagnostics track saves across reload and export only redacted context", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await createNewProject(page, "SECRET PROJECT");
+  await importFiles(page, {
+    name: "SECRET.BAT",
+    mimeType: "text/plain",
+    buffer: Buffer.from(
+      "echo PRIVATE-SOURCE\r\nchoice PRIVATE-SIMULATION-VALUE\r\nexit",
+    ),
+  });
+  await page.locator(".block").first().click();
+  await page.locator("#editNote").fill("PRIVATE-NOTE");
+  await page.getByRole("button", { name: "Apply" }).click();
+  await page.getByRole("tab", { name: "Source" }).click();
+  await page
+    .locator("#sourceView")
+    .fill(
+      "echo PRIVATE-SOURCE-EDITED\r\nchoice PRIVATE-SIMULATION-VALUE\r\nexit",
+    );
+  await expect(page.locator("#diagnosticsBadge")).toHaveText("Saving");
+  await expect(page.locator("#appMessage")).toHaveText("Saved");
+  await expect(page.locator("#diagnosticsBadge")).toHaveText("Healthy");
+
+  await page.getByRole("button", { name: "Diagnostics: Healthy" }).click();
+  await expect(page.locator("#diagnosticsSaveState")).toHaveText("Saved");
+  await expect(page.locator("#diagnosticsLastSave")).not.toHaveText(
+    "Not observed this session",
+  );
+  await expect(page.locator("#diagnosticsEvents")).toContainText(
+    "project.import.succeeded",
+  );
+
+  const exported = await downloadJson(page, "Export diagnostics");
+  expect(exported.download.suggestedFilename()).toMatch(
+    /^batflow-diagnostics-\d{8}-\d{6}Z\.json$/,
+  );
+  expect(exported.document.diagnosticsFormatVersion).toBe(1);
+  expect(exported.document.createdBy.productVersion).toBe("0.5.3");
+  expect(exported.document.versionDomains).toEqual({
+    projectFormat: 2,
+    indexedDbSchema: 1,
+    interpreterProfile: "msdos-7.1-command.com",
+  });
+  expect(exported.document.counts.files).toBe(1);
+  for (const secret of [
+    "SECRET PROJECT",
+    "SECRET.BAT",
+    "PRIVATE-SOURCE",
+    "PRIVATE-NOTE",
+    "PRIVATE-SIMULATION-VALUE",
+  ]) {
+    expect(exported.content).not.toContain(secret);
+  }
+  await page.getByRole("button", { name: "Close" }).click();
+
+  await page.reload();
+  await expect(page.locator("#diagnosticsBadge")).toHaveText("Healthy");
+  await page.getByRole("button", { name: "Diagnostics: Healthy" }).click();
+  await expect(page.locator("#diagnosticsEvents")).toContainText(
+    "project.import.succeeded",
+  );
+  await expect(page.locator("#diagnosticsLastSave")).not.toHaveText(
+    "Not observed this session",
+  );
+});
+
+test("diagnostics retain save failures until recovery", async ({ page }) => {
+  await page.goto("/");
+  await importFiles(page, {
+    name: "MAIN.BAT",
+    mimeType: "text/plain",
+    buffer: Buffer.from("echo original\r\nexit"),
+  });
+  await page.getByRole("tab", { name: "Source" }).click();
+  await page.evaluate(() => {
+    globalThis.__batflowOriginalPut = globalThis.IDBObjectStore.prototype.put;
+    globalThis.IDBObjectStore.prototype.put = function forceSaveFailure() {
+      throw new DOMException("Forced diagnostics failure", "UnknownError");
+    };
+  });
+  await page.locator("#sourceView").fill("echo failed save\r\nexit");
+  await expect(page.locator("#appMessage")).toContainText("Save failed");
+  await expect(page.locator("#diagnosticsBadge")).toHaveText("Error");
+
+  await page.locator("#fileInput").setInputFiles({
+    name: "invalid.batflow",
+    mimeType: "application/json",
+    buffer: Buffer.from('{"formatVersion":999,"project":{}}'),
+  });
+  await expect(page.locator("#appMessage")).toContainText("Import failed");
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await expect(page.locator("#diagnosticsBadge")).toHaveText("Error");
+  await page.getByRole("button", { name: "Diagnostics: Error" }).click();
+  await expect(page.locator("#diagnosticsOverall")).toContainText(
+    "Forced diagnostics failure",
+  );
+  await expect(page.locator("#diagnosticsEvents")).toContainText(
+    "storage.save.failed",
+  );
+  await page.getByRole("button", { name: "Close" }).click();
+
+  await page.evaluate(() => {
+    globalThis.IDBObjectStore.prototype.put = globalThis.__batflowOriginalPut;
+  });
+  await page.locator("#sourceView").fill("echo recovered save\r\nexit");
+  await expect(page.locator("#appMessage")).toHaveText("Saved");
+  await expect(page.locator("#diagnosticsBadge")).toHaveText("Healthy");
+  await page.getByRole("button", { name: "Diagnostics: Healthy" }).click();
+  await expect(page.locator("#diagnosticsEvents")).toContainText(
+    "storage.save.failed",
+  );
+  await expect(page.locator("#diagnosticsEvents")).toContainText(
+    "storage.save.recovered",
+  );
+});
+
+test("runtime errors are captured and clearing history preserves active health", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.evaluate(() => {
+    globalThis.setTimeout(() => {
+      throw new Error("LOCAL-RUNTIME-DETAIL");
+    }, 0);
+  });
+  await expect(page.locator("#diagnosticsBadge")).toHaveText("Error");
+  await page.getByRole("button", { name: "Diagnostics: Error" }).click();
+  await expect(page.locator("#diagnosticsEvents")).toContainText(
+    "runtime.error",
+  );
+  await expect(page.locator("#diagnosticsEvents")).toContainText(
+    "LOCAL-RUNTIME-DETAIL",
+  );
+  await page.getByRole("button", { name: "Clear history" }).click();
+  await expect(page.locator("#diagnosticsEvents")).toContainText(
+    "No session events recorded",
+  );
+  await expect(page.locator("#diagnosticsOverall")).toContainText("Error");
+
+  const exported = await downloadJson(page, "Export diagnostics");
+  expect(exported.content).not.toContain("LOCAL-RUNTIME-DETAIL");
+  await page.getByRole("button", { name: "Close" }).click();
+  await page.reload();
+  await expect(page.locator("#diagnosticsBadge")).toHaveText("Healthy");
+
+  await page.evaluate(() => {
+    void Promise.reject(new Error("LOCAL-REJECTION-DETAIL"));
+  });
+  await expect(page.locator("#diagnosticsBadge")).toHaveText("Error");
+  await page.getByRole("button", { name: "Diagnostics: Error" }).click();
+  await expect(page.locator("#diagnosticsEvents")).toContainText(
+    "runtime.rejection",
   );
 });
 
@@ -480,6 +685,12 @@ test("failed startup migration rewrite is reported as a storage error", async ({
     "The upgraded project could not be saved",
   );
   await expect(page.locator("#appMessage")).toHaveClass(/error/);
+  await expect(page.locator("#diagnosticsBadge")).toHaveText("Error");
+  await page.getByRole("button", { name: "Diagnostics: Error" }).click();
+  await expect(page.locator("#diagnosticsEvents")).toContainText(
+    "storage.migration.failed",
+  );
+  await expect(page.locator("#diagnosticsSaveState")).toHaveText("Error");
 });
 
 test("oversized stored outcomes are cleared without losing the project", async ({

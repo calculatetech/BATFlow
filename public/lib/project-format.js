@@ -7,10 +7,10 @@ import {
   normalizeProjectPath,
   reconcileLineIds,
   splitSource,
-} from "./batch-core.js?v=0.5.2-dev";
+} from "./batch-core.js?v=0.5.3-dev";
 
 export const PRODUCT_NAME = "BATFlow";
-export const PRODUCT_VERSION = "0.5.2";
+export const PRODUCT_VERSION = "0.5.3";
 export const PROJECT_FORMAT_VERSION = 2;
 export const INTERPRETER_PROFILE = "msdos-7.1-command.com";
 export const SUPPORTED_SOURCE_EXTENSIONS = [".bat", ".sys", ".txt"];
@@ -719,7 +719,7 @@ export function decodeUtf8(bytes) {
     return decoded.replace(/^\uFEFF/, "");
   } catch {
     throw new ProjectFormatError(
-      "The selected file is not valid UTF-8. BATFlow 0.5.2 does not guess DOS code pages.",
+      "The selected file is not valid UTF-8. BATFlow 0.5.3 does not guess DOS code pages.",
     );
   }
 }
