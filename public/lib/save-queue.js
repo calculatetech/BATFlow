@@ -1,6 +1,7 @@
 export function createSaveQueue(options) {
   const save = options.save;
   const onStatus = options.onStatus;
+  const onState = options.onState || (() => {});
   const delay = options.delay ?? 350;
   const schedule = options.schedule || globalThis.setTimeout;
   const cancel = options.cancel || globalThis.clearTimeout;
@@ -15,13 +16,17 @@ export function createSaveQueue(options) {
 
     const persist = () => {
       timer = null;
-      if (queuedRevision === revision) onStatus("Saving…", "");
+      if (queuedRevision === revision) {
+        onStatus("Saving…", "");
+        onState({ status: "saving" });
+      }
       const operation = chain
         .then(() => save(snapshot))
         .then(() => {
           const current = queuedRevision === revision && timer === null;
           if (current) {
             onStatus("Saved", "success");
+            onState({ status: "saved" });
           }
           return { status: current ? "saved" : "superseded" };
         })
@@ -29,6 +34,7 @@ export function createSaveQueue(options) {
           const current = queuedRevision === revision;
           if (current) {
             onStatus(`Save failed: ${error.message}`, "error");
+            onState({ status: "failed", error });
           }
           return {
             status: current ? "failed" : "superseded",
@@ -42,6 +48,7 @@ export function createSaveQueue(options) {
     if (immediate) return persist();
     timer = schedule(persist, delay);
     onStatus("Unsaved changes", "");
+    onState({ status: "unsaved" });
     return Promise.resolve({ status: "queued" });
   }
 

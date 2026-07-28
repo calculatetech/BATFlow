@@ -39,7 +39,7 @@ test("versioned project documents round-trip without losing durable metadata", (
 
   const document = JSON.parse(serializeProject(project));
   assert.equal(document.formatVersion, PROJECT_FORMAT_VERSION);
-  assert.equal(document.createdBy.productVersion, "0.5.2");
+  assert.equal(document.createdBy.productVersion, "0.5.3");
   assert.equal(document.interpreterProfile, "msdos-7.1-command.com");
 
   const imported = importProjectDocument(document);

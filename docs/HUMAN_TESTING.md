@@ -62,6 +62,18 @@ probe output belong under ignored `.agent/test-results/`, not in commits.
   compare source, notes, file list, and line endings.
 - Confirm an invalid or future-version project reports an error without
   replacing current work.
+- Open Diagnostics and confirm it reports product 0.5.3, project format 2,
+  IndexedDB schema 1, diagnostics format 1, and the current interpreter
+  profile.
+- Edit source and confirm Diagnostics transitions through Saving to Healthy,
+  records the successful-save time, and retains session events after reload.
+- Force or otherwise observe a save/storage failure and confirm the health
+  badge remains Error even if another transient message appears. After a
+  successful save, confirm health recovers while the failure remains in
+  history.
+- Export diagnostics and confirm it contains operational codes, versions, and
+  counts but no project name, filenames, source, notes, or simulation values.
+  Clear history and confirm an active failure remains visible.
 - Navigate file items, tabs, labels, blocks, validation findings, and inspector
   controls using only the keyboard at desktop and narrow viewport widths.
 - Confirm the repository, `.git`, `.agent`, `docs`, tests, private fixtures, and

@@ -68,6 +68,7 @@ findings have these dispositions:
 | DI-08 | Closed in 0.5.2 by editable project names, durable file IDs, entry designation, relative-folder import, and explicit DOS-insensitive collision handling. |
 | FC-01 through FC-07 | Closed by pure parser/simulator modules and named unit/browser regressions for outcomes, stale traces, prefixes, quoting, target intent, limits, conditional flow, and EXIT. |
 | QA-01 | Closed by extracting browser-independent core modules with deterministic tests. |
+| QA-04 | Closed in 0.5.3 by structured runtime/storage/save health, bounded session diagnostics, global error capture, version-domain display, and privacy-safe local debug export. |
 
 Medium- and low-priority findings are either addressed in the merged foundation
 or retained under `0.5.x` in the [roadmap](ROADMAP.md). Automated completion

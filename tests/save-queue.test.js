@@ -22,6 +22,7 @@ test("an older save cannot mark a newer debounced revision as saved", async () =
   const scheduled = [];
   const saves = [];
   const statuses = [];
+  const states = [];
   const queue = createSaveQueue({
     save(snapshot) {
       const pending = deferred();
@@ -30,6 +31,9 @@ test("an older save cannot mark a newer debounced revision as saved", async () =
     },
     onStatus(message) {
       statuses.push(message);
+    },
+    onState(event) {
+      states.push(event.status);
     },
     schedule(callback) {
       scheduled.push(callback);
@@ -49,9 +53,11 @@ test("an older save cannot mark a newer debounced revision as saved", async () =
 
   queue.queue({ value: "latest" });
   assert.equal(statuses.at(-1), "Unsaved changes");
+  assert.equal(states.at(-1), "unsaved");
   saves[0].pending.resolve();
   assert.equal((await firstCompletion).status, "superseded");
   assert.equal(statuses.at(-1), "Unsaved changes");
+  assert.equal(states.at(-1), "unsaved");
 
   const latestPersist = scheduled.shift();
   const latestCompletion = latestPersist();
@@ -60,17 +66,22 @@ test("an older save cannot mark a newer debounced revision as saved", async () =
   saves[1].pending.resolve();
   assert.equal((await latestCompletion).status, "saved");
   assert.equal(statuses.at(-1), "Saved");
+  assert.deepEqual(states, ["unsaved", "saving", "unsaved", "saving", "saved"]);
 });
 
 test("a current save failure is reported to its caller and status consumer", async () => {
   const error = new Error("storage unavailable");
   const statuses = [];
+  const states = [];
   const queue = createSaveQueue({
     save() {
       throw error;
     },
     onStatus(message) {
       statuses.push(message);
+    },
+    onState(event) {
+      states.push(event);
     },
   });
 
@@ -79,12 +90,18 @@ test("a current save failure is reported to its caller and status consumer", asy
   assert.equal(result.status, "failed");
   assert.equal(result.error, error);
   assert.equal(statuses.at(-1), "Save failed: storage unavailable");
+  assert.deepEqual(
+    states.map((event) => event.status),
+    ["saving", "failed"],
+  );
+  assert.equal(states.at(-1).error, error);
 });
 
 test("an older save failure cannot overwrite a newer unsaved status", async () => {
   const scheduled = [];
   const firstSave = deferred();
   const statuses = [];
+  const states = [];
   let saveCount = 0;
   const queue = createSaveQueue({
     save() {
@@ -93,6 +110,9 @@ test("an older save failure cannot overwrite a newer unsaved status", async () =
     },
     onStatus(message) {
       statuses.push(message);
+    },
+    onState(event) {
+      states.push(event.status);
     },
     schedule(callback) {
       scheduled.push(callback);
@@ -109,8 +129,10 @@ test("an older save failure cannot overwrite a newer unsaved status", async () =
   const firstResult = await firstCompletion;
   assert.equal(firstResult.status, "superseded");
   assert.equal(statuses.at(-1), "Unsaved changes");
+  assert.equal(states.at(-1), "unsaved");
 
   const latestResult = await scheduled.shift()();
   assert.equal(latestResult.status, "saved");
   assert.equal(statuses.at(-1), "Saved");
+  assert.deepEqual(states, ["saving", "unsaved", "saving", "saved"]);
 });

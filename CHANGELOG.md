@@ -4,6 +4,28 @@ BATFlow uses Semantic Versioning for managed development milestones. Formal Git
 tags and GitHub releases begin at `1.0.0`. The project-format, browser-storage,
 and interpreter-profile versions are managed separately.
 
+## 0.5.3 — structured diagnostics
+
+### Added
+
+- An always-visible operational health badge and accessible diagnostics dialog.
+- Bounded diagnostic history retained through reloads for the current tab
+  session.
+- A local diagnostics JSON export that excludes project names, filenames,
+  source, notes, simulation values, and raw error details.
+
+### Changed
+
+- Save processing now exposes structured Unsaved, Saving, Saved, and Error
+  states with the last successful write observed in the tab session.
+- Storage load, migration, recovery, import, and unexpected runtime failures
+  now produce stable diagnostic codes and actionable local details.
+
+### Fixed
+
+- Later transient messages no longer conceal an active storage or save failure.
+- Clearing diagnostic history no longer masks an unresolved operational error.
+
 ## 0.5.2 — project and file identity hardening
 
 ### Added

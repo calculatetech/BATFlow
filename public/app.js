@@ -3,8 +3,10 @@ import {
   norm,
   parseBatch,
   resolveBatchTarget,
-} from "./lib/batch-core.js?v=0.5.2-dev";
+} from "./lib/batch-core.js?v=0.5.3-dev";
 import {
+  INTERPRETER_PROFILE,
+  PROJECT_FORMAT_VERSION,
   PRODUCT_VERSION,
   ProjectFormatError,
   addTextFile,
@@ -24,16 +26,22 @@ import {
   updateFileContent,
   updateProjectName,
   updateProjectSimulationScenario,
-} from "./lib/project-format.js?v=0.5.2-dev";
+} from "./lib/project-format.js?v=0.5.3-dev";
 import {
+  DATABASE_VERSION,
   loadCurrentProject,
   saveCurrentProject,
-} from "./lib/storage.js?v=0.5.2-dev";
-import { createSaveQueue } from "./lib/save-queue.js?v=0.5.2-dev";
+} from "./lib/storage.js?v=0.5.3-dev";
+import { createSaveQueue } from "./lib/save-queue.js?v=0.5.3-dev";
+import {
+  DIAGNOSTICS_FORMAT_VERSION,
+  createDiagnosticsDocument,
+  createDiagnosticsStore,
+} from "./lib/diagnostics.js?v=0.5.3-dev";
 import {
   collectOutcomeRequests,
   simulate,
-} from "./lib/simulation.js?v=0.5.2-dev";
+} from "./lib/simulation.js?v=0.5.3-dev";
 
 const $ = (id) => document.getElementById(id);
 const state = {
@@ -49,6 +57,8 @@ const state = {
   messageKind: "",
   pendingImport: null,
 };
+const diagnostics = createDiagnosticsStore();
+const earlyDiagnostics = globalThis.__batflowEarlyDiagnostics;
 
 function escapeHtml(value) {
   return String(value ?? "").replace(
@@ -76,9 +86,68 @@ function setMessage(message, kind = "") {
   element.className = `app-message ${kind}`.trim();
 }
 
+function errorDetail(error) {
+  if (!error) return "";
+  return [error.name, error.message, error.stack].filter(Boolean).join("\n");
+}
+
+function refreshDiagnostics() {
+  renderDiagnostics();
+}
+
+function recordDiagnostic(event) {
+  diagnostics.record(event);
+  refreshDiagnostics();
+}
+
+function setDiagnosticSubsystem(name, status, details = {}) {
+  diagnostics.setSubsystem(name, status, details);
+  refreshDiagnostics();
+}
+
+function handleSaveState(event) {
+  const previous = diagnostics.getSnapshot();
+  if (event.status === "unsaved" || event.status === "saving") {
+    setDiagnosticSubsystem("save", event.status);
+    return;
+  }
+  if (event.status === "failed") {
+    setDiagnosticSubsystem("save", "error", {
+      detail: errorDetail(event.error),
+    });
+    setDiagnosticSubsystem("storage", "error", {
+      detail: errorDetail(event.error),
+    });
+    recordDiagnostic({
+      severity: "error",
+      subsystem: "save",
+      code: "storage.save.failed",
+      summary: "Project changes could not be saved.",
+      detail: errorDetail(event.error),
+    });
+    return;
+  }
+  if (event.status === "saved") {
+    setDiagnosticSubsystem("save", "saved", { successfulAt: true });
+    setDiagnosticSubsystem("storage", "healthy");
+    if (
+      previous.subsystems.save.status === "error" ||
+      previous.subsystems.storage.status === "error"
+    ) {
+      recordDiagnostic({
+        severity: "info",
+        subsystem: "save",
+        code: "storage.save.recovered",
+        summary: "Project saving recovered.",
+      });
+    }
+  }
+}
+
 const projectSaveQueue = createSaveQueue({
   save: saveCurrentProject,
   onStatus: setMessage,
+  onState: handleSaveState,
 });
 
 function projectHasWork() {
@@ -170,6 +239,7 @@ function render() {
   renderTraceView();
   applyView();
   updateStatus();
+  renderDiagnostics();
 }
 
 function renderFiles() {
@@ -734,6 +804,120 @@ function updateStatus() {
   exportButton.disabled = !state.currentFile;
 }
 
+function diagnosticStatusLabel(status) {
+  return (
+    {
+      attention: "Attention",
+      checking: "Checking",
+      error: "Error",
+      healthy: "Healthy",
+      idle: "Idle",
+      saved: "Saved",
+      saving: "Saving",
+      unsaved: "Unsaved changes",
+    }[status] || status
+  );
+}
+
+function diagnosticCounts() {
+  const pathWarnings = state.currentFile
+    ? analyzeProjectPath(state.currentFile).warnings.length
+    : 0;
+  return {
+    fileCount: Object.keys(state.project.files).length,
+    validationCount: (state.parsed?.validations.length || 0) + pathWarnings,
+  };
+}
+
+function diagnosticsContext() {
+  return {
+    productVersion: PRODUCT_VERSION,
+    projectFormatVersion: PROJECT_FORMAT_VERSION,
+    databaseVersion: DATABASE_VERSION,
+    interpreterProfile: INTERPRETER_PROFILE,
+    userAgent: globalThis.navigator?.userAgent || "",
+    language: globalThis.navigator?.language || "",
+    online: globalThis.navigator?.onLine !== false,
+    ...diagnosticCounts(),
+  };
+}
+
+function renderDiagnostics() {
+  const snapshot = diagnostics.getSnapshot();
+  const overall = diagnosticStatusLabel(snapshot.health);
+  const button = $("openDiagnostics");
+  button.className = `diagnostics-button ${snapshot.health}`;
+  button.setAttribute("aria-label", `Diagnostics: ${overall}`);
+  $("diagnosticsBadge").textContent = overall;
+
+  const active = Object.entries(snapshot.subsystems).filter(([, value]) =>
+    ["attention", "error"].includes(value.status),
+  );
+  $("diagnosticsOverall").className =
+    `diagnostics-overall ${snapshot.health}`.trim();
+  $("diagnosticsOverall").innerHTML =
+    `<strong>${escapeHtml(overall)}</strong>` +
+    (active.length
+      ? `<ul>${active
+          .map(
+            ([name, value]) =>
+              `<li><span>${escapeHtml(name)}</span>: ${escapeHtml(
+                value.detail || diagnosticStatusLabel(value.status),
+              )}</li>`,
+          )
+          .join("")}</ul>`
+      : "<span>No active operational problems.</span>");
+
+  $("diagnosticsSaveState").textContent = diagnosticStatusLabel(
+    snapshot.subsystems.save.status,
+  );
+  $("diagnosticsLastSave").textContent = snapshot.lastSuccessfulSaveAt
+    ? new Date(snapshot.lastSuccessfulSaveAt).toLocaleString()
+    : "Not observed this session";
+  $("diagnosticsStorageState").textContent = diagnosticStatusLabel(
+    snapshot.subsystems.storage.status,
+  );
+  $("diagnosticsRetentionState").textContent = diagnosticStatusLabel(
+    snapshot.subsystems.retention.status,
+  );
+  $("diagnosticsVersions").innerHTML = [
+    ["Product", PRODUCT_VERSION],
+    ["Project format", PROJECT_FORMAT_VERSION],
+    ["IndexedDB schema", DATABASE_VERSION],
+    ["Diagnostics format", DIAGNOSTICS_FORMAT_VERSION],
+    ["Interpreter", INTERPRETER_PROFILE],
+  ]
+    .map(
+      ([label, value]) =>
+        `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`,
+    )
+    .join("");
+  $("diagnosticsEvents").innerHTML = snapshot.events.length
+    ? [...snapshot.events]
+        .reverse()
+        .map(
+          (event) =>
+            `<article class="diagnostic-event ${escapeAttr(event.severity)}">` +
+            `<div><span class="diagnostic-severity">${escapeHtml(
+              event.severity,
+            )}</span>` +
+            `<time datetime="${escapeAttr(event.at)}">${escapeHtml(
+              new Date(event.at).toLocaleString(),
+            )}</time></div>` +
+            `<strong>${escapeHtml(event.summary)}</strong>` +
+            `<code>${escapeHtml(event.code)}</code>` +
+            (event.detail
+              ? `<details><summary>Technical details</summary><pre>${escapeHtml(
+                  event.detail,
+                )}</pre></details>`
+              : "") +
+            "</article>",
+        )
+        .join("")
+    : '<p class="empty-state">No session events recorded.</p>';
+  $("clearDiagnostics").disabled = snapshot.events.length === 0;
+}
+
 function download(name, content, type = "text/plain") {
   const anchor = document.createElement("a");
   anchor.href = URL.createObjectURL(new Blob([content], { type }));
@@ -958,6 +1142,16 @@ async function prepareImport(fileList, { fromFolder = false } = {}) {
   renderImportPreview();
 }
 
+function recordImportRejection(error) {
+  recordDiagnostic({
+    severity: "warning",
+    subsystem: "runtime",
+    code: "project.import.rejected",
+    summary: "A project import was rejected.",
+    detail: errorDetail(error),
+  });
+}
+
 async function applyPendingImport() {
   const pending = state.pendingImport;
   if (!pending) return;
@@ -971,6 +1165,26 @@ async function applyPendingImport() {
     render();
     const saveResult = await queueSave({ immediate: true });
     const count = imported.discardedSimulationOutcomes;
+    if (count) {
+      recordDiagnostic({
+        severity: "warning",
+        subsystem: "runtime",
+        code: "project.import.repaired",
+        summary: "A project import required safe recovery.",
+        detail: `Cleared ${count} out-of-range simulation ${
+          count === 1 ? "outcome" : "outcomes"
+        }.`,
+      });
+    }
+    recordDiagnostic({
+      severity: "info",
+      subsystem: "runtime",
+      code: "project.import.succeeded",
+      summary: "Project import completed.",
+      detail: imported.migrated
+        ? `Upgraded ${imported.sourceFormat}.`
+        : "Imported project format 2.",
+    });
     const repairMessage = count
       ? `Project imported; cleared ${count} out-of-range simulation ${
           count === 1 ? "outcome" : "outcomes"
@@ -1014,6 +1228,13 @@ async function applyPendingImport() {
   resetImportDialog();
   render();
   const saveResult = await queueSave({ immediate: true });
+  recordDiagnostic({
+    severity: "info",
+    subsystem: "runtime",
+    code: "project.import.succeeded",
+    summary: "Project import completed.",
+    detail: `${pending.resolved.length} source candidates; ${skipped} unsupported files skipped.`,
+  });
   if (saveResult.status === "saved" && (skipped || warningCount)) {
     setMessage(
       `Saved · Import complete${
@@ -1039,6 +1260,7 @@ $("fileInput").onchange = async (event) => {
     await prepareImport(event.target.files);
     if (!$("importDialog").open) $("importDialog").showModal();
   } catch (error) {
+    recordImportRejection(error);
     $("importError").textContent = `Import failed: ${error.message}`;
     setMessage(`Import failed: ${error.message}`, "error");
     if (!$("importDialog").open) $("importDialog").showModal();
@@ -1050,6 +1272,7 @@ $("folderInput").onchange = async (event) => {
   try {
     await prepareImport(event.target.files, { fromFolder: true });
   } catch (error) {
+    recordImportRejection(error);
     $("importError").textContent = `Import failed: ${error.message}`;
     setMessage(`Import failed: ${error.message}`, "error");
   } finally {
@@ -1067,6 +1290,7 @@ $("importForm").onsubmit = async (event) => {
   try {
     await applyPendingImport();
   } catch (error) {
+    recordImportRejection(error);
     $("importError").textContent = `Import failed: ${error.message}`;
     setMessage(`Import failed: ${error.message}`, "error");
   }
@@ -1175,6 +1399,34 @@ function projectDownloadName(name) {
   return `${safe || "project"}.batflow`;
 }
 
+$("openDiagnostics").onclick = () => {
+  renderDiagnostics();
+  $("diagnosticsDialog").showModal();
+};
+
+$("closeDiagnostics").onclick = () => $("diagnosticsDialog").close();
+
+$("clearDiagnostics").onclick = () => {
+  diagnostics.clearHistory();
+  renderDiagnostics();
+};
+
+$("exportDiagnostics").onclick = () => {
+  const document = createDiagnosticsDocument(
+    diagnostics.getSnapshot(),
+    diagnosticsContext(),
+  );
+  const stamp = document.createdAt
+    .replace(/[-:]/g, "")
+    .replace(/\.\d{3}Z$/, "Z")
+    .replace("T", "-");
+  download(
+    `batflow-diagnostics-${stamp}.json`,
+    `${JSON.stringify(document, null, 2)}\n`,
+    "application/json",
+  );
+};
+
 $("exportProject").onclick = () => {
   download(
     projectDownloadName(state.project.name),
@@ -1246,13 +1498,105 @@ document.querySelectorAll("[data-view]").forEach((button) => {
   };
 });
 
+globalThis.addEventListener(
+  "error",
+  (event) => {
+    const resourceFailure = event.target && event.target !== globalThis;
+    const detail = resourceFailure
+      ? `${event.target.tagName || "Resource"}: ${
+          event.target.src || event.target.href || "unknown"
+        }`
+      : errorDetail(event.error) || event.message;
+    setDiagnosticSubsystem("runtime", "error", { detail });
+    recordDiagnostic({
+      severity: "error",
+      subsystem: "runtime",
+      code: resourceFailure ? "runtime.asset.failed" : "runtime.error",
+      summary: resourceFailure
+        ? "A runtime asset failed to load."
+        : "An unexpected application error occurred.",
+      detail,
+    });
+    setMessage(
+      "Unexpected application error. Open Diagnostics for details.",
+      "error",
+    );
+  },
+  true,
+);
+
+globalThis.addEventListener("unhandledrejection", (event) => {
+  const detail = errorDetail(event.reason) || String(event.reason ?? "");
+  setDiagnosticSubsystem("runtime", "error", { detail });
+  recordDiagnostic({
+    severity: "error",
+    subsystem: "runtime",
+    code: "runtime.rejection",
+    summary: "An unexpected asynchronous error occurred.",
+    detail,
+  });
+  setMessage(
+    "Unexpected asynchronous error. Open Diagnostics for details.",
+    "error",
+  );
+});
+
+if (earlyDiagnostics) {
+  earlyDiagnostics.startupComplete = true;
+  for (const event of earlyDiagnostics.events) {
+    const code = [
+      "runtime.asset.failed",
+      "runtime.error",
+      "runtime.rejection",
+    ].includes(event.code)
+      ? event.code
+      : "runtime.event";
+    setDiagnosticSubsystem("runtime", "error", { detail: event.detail });
+    recordDiagnostic({
+      severity: "error",
+      subsystem: "runtime",
+      code,
+      detail: event.detail,
+    });
+  }
+  earlyDiagnostics.events = [];
+}
+
+recordDiagnostic({
+  severity: "info",
+  subsystem: "runtime",
+  code: "app.started",
+  summary: "BATFlow started.",
+});
+
 try {
   const loaded = await loadCurrentProject();
+  setDiagnosticSubsystem("storage", "healthy");
+  recordDiagnostic({
+    severity: "info",
+    subsystem: "storage",
+    code: "storage.load.succeeded",
+    summary: "Browser project storage is available.",
+  });
   if (loaded) {
     state.project = loaded.project;
     state.currentFile = entryFilePath();
+    setDiagnosticSubsystem("save", "saved", {
+      successfulAt:
+        (loaded.migratedFrom || loaded.discardedSimulationOutcomes) &&
+        loaded.repairPersisted,
+    });
     if (loaded.discardedSimulationOutcomes) {
       const count = loaded.discardedSimulationOutcomes;
+      recordDiagnostic({
+        severity: "warning",
+        subsystem: "storage",
+        code: "storage.recovery.succeeded",
+        summary: "Stored project data required safe recovery.",
+        detail: `Cleared ${count} out-of-range simulation ${
+          count === 1 ? "outcome" : "outcomes"
+        }.`,
+      });
       setMessage(
         `Recovered project and cleared ${count} out-of-range simulation ${
           count === 1 ? "outcome" : "outcomes"
@@ -1264,6 +1608,17 @@ try {
         loaded.repairPersisted ? "success" : "error",
       );
     } else if (loaded.migratedFrom) {
+      recordDiagnostic({
+        severity: loaded.repairPersisted ? "info" : "error",
+        subsystem: "storage",
+        code: loaded.repairPersisted
+          ? "storage.migration.succeeded"
+          : "storage.migration.failed",
+        summary: loaded.repairPersisted
+          ? "Stored project data was upgraded."
+          : "An upgraded project could not be saved.",
+        detail: `Source: ${loaded.migratedFrom}`,
+      });
       setMessage(
         `Recovered project data from ${loaded.migratedFrom}.${
           loaded.repairPersisted
@@ -1273,8 +1628,35 @@ try {
         loaded.repairPersisted ? "success" : "error",
       );
     }
+    if (!loaded.repairPersisted) {
+      const detail = "Recovered project changes are not persisted.";
+      setDiagnosticSubsystem("storage", "error", { detail });
+      setDiagnosticSubsystem("save", "error", { detail });
+      if (loaded.discardedSimulationOutcomes) {
+        recordDiagnostic({
+          severity: "error",
+          subsystem: "storage",
+          code: "storage.migration.failed",
+          summary: "An upgraded project could not be saved.",
+          detail,
+        });
+      }
+    }
   }
 } catch (error) {
+  setDiagnosticSubsystem("storage", "error", {
+    detail: errorDetail(error),
+  });
+  setDiagnosticSubsystem("save", "error", {
+    detail: "Project storage is unavailable.",
+  });
+  recordDiagnostic({
+    severity: "error",
+    subsystem: "storage",
+    code: "storage.load.failed",
+    summary: "Browser project storage could not be loaded.",
+    detail: errorDetail(error),
+  });
   setMessage(`Storage unavailable: ${error.message}`, "error");
 }
 render();

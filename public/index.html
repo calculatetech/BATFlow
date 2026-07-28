@@ -4,15 +4,95 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>BATFlow — DOS 7.1 Visual Batch Editor</title>
-    <link rel="stylesheet" href="styles.css?v=0.5.2-dev" />
+    <script>
+      (() => {
+        const early = {
+          events: [],
+          startupComplete: false,
+        };
+        globalThis.__batflowEarlyDiagnostics = early;
+
+        const detailFor = (event) => {
+          if (event.target && event.target !== globalThis) {
+            return `${event.target.tagName || "Resource"}: ${
+              event.target.src || event.target.href || "unknown"
+            }`;
+          }
+          return [event.message, event.filename]
+            .filter(Boolean)
+            .join("\n")
+            .slice(0, 4096);
+        };
+        const queue = (code, detail) => {
+          if (early.startupComplete) return;
+          early.events.push({
+            code,
+            detail: String(detail || "").slice(0, 4096),
+          });
+        };
+
+        globalThis.addEventListener(
+          "error",
+          (event) => {
+            queue(
+              event.target && event.target !== globalThis
+                ? "runtime.asset.failed"
+                : "runtime.error",
+              detailFor(event),
+            );
+          },
+          true,
+        );
+        globalThis.addEventListener("unhandledrejection", (event) => {
+          queue(
+            "runtime.rejection",
+            event.reason?.message || String(event.reason || ""),
+          );
+        });
+
+        globalThis.addEventListener("DOMContentLoaded", () => {
+          if (early.startupComplete || early.events.length === 0) return;
+          const button = document.getElementById("openDiagnostics");
+          const badge = document.getElementById("diagnosticsBadge");
+          button.className = "diagnostics-button error";
+          button.setAttribute("aria-label", "Diagnostics: Error");
+          badge.textContent = "Error";
+          button.addEventListener("click", () => {
+            if (early.startupComplete) return;
+            document.getElementById("diagnosticsOverall").innerHTML =
+              "<strong>Error</strong><span>BATFlow could not start because a required application asset failed.</span>";
+            document.getElementById("diagnosticsEvents").innerHTML =
+              "<article class='diagnostic-event error'><strong>A required application asset failed to load.</strong><code>runtime.asset.failed</code></article>";
+            document.getElementById("clearDiagnostics").disabled = true;
+            document.getElementById("exportDiagnostics").disabled = true;
+            document.getElementById("diagnosticsDialog").showModal();
+          });
+          document
+            .getElementById("closeDiagnostics")
+            .addEventListener("click", () =>
+              document.getElementById("diagnosticsDialog").close(),
+            );
+        });
+      })();
+    </script>
+    <link rel="stylesheet" href="styles.css?v=0.5.3-dev" />
   </head>
   <body>
     <header class="topbar">
       <div>
         <h1>BATFlow</h1>
-        <span>Win98 MS-DOS 7.1 visual batch editor · v0.5.2 · development</span>
+        <span>Win98 MS-DOS 7.1 visual batch editor · v0.5.3 · development</span>
       </div>
       <div class="toolbar">
+        <button
+          id="openDiagnostics"
+          class="diagnostics-button healthy"
+          type="button"
+          aria-label="Diagnostics: Healthy"
+        >
+          Diagnostics
+          <span id="diagnosticsBadge" aria-live="polite">Healthy</span>
+        </button>
         <button id="newProject" type="button">New project</button>
         <button id="openImport" type="button">Import</button>
         <button id="exportProject" type="button">Export project</button>
@@ -198,6 +278,46 @@
       </form>
     </dialog>
 
-    <script type="module" src="app.js?v=0.5.2-dev"></script>
+    <dialog
+      id="diagnosticsDialog"
+      class="diagnostics-dialog"
+      aria-labelledby="diagnosticsTitle"
+    >
+      <section>
+        <h2 id="diagnosticsTitle">Diagnostics</h2>
+        <div id="diagnosticsOverall" class="diagnostics-overall"></div>
+        <dl class="diagnostics-summary">
+          <div>
+            <dt>Save state</dt>
+            <dd id="diagnosticsSaveState"></dd>
+          </div>
+          <div>
+            <dt>Last successful save</dt>
+            <dd id="diagnosticsLastSave"></dd>
+          </div>
+          <div>
+            <dt>Project storage</dt>
+            <dd id="diagnosticsStorageState"></dd>
+          </div>
+          <div>
+            <dt>Diagnostic history</dt>
+            <dd id="diagnosticsRetentionState"></dd>
+          </div>
+        </dl>
+        <h3>Version domains</h3>
+        <dl id="diagnosticsVersions" class="diagnostics-summary"></dl>
+        <h3>Session events</h3>
+        <div id="diagnosticsEvents" class="diagnostics-events"></div>
+        <div class="dialog-actions">
+          <button id="clearDiagnostics" type="button">Clear history</button>
+          <button id="exportDiagnostics" type="button">
+            Export diagnostics
+          </button>
+          <button id="closeDiagnostics" type="button">Close</button>
+        </div>
+      </section>
+    </dialog>
+
+    <script type="module" src="app.js?v=0.5.3-dev"></script>
   </body>
 </html>

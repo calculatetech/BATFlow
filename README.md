@@ -3,7 +3,7 @@
 BATFlow is a static, client-side visual editor and control-flow simulator for
 Win98 MS-DOS 7.1 batch files.
 
-The current managed development baseline is `0.5.2`. BATFlow was formerly
+The current managed development baseline is `0.5.3`. BATFlow was formerly
 called `passes`. Pre-1.0 development uses structured `0.x` versions without
 formal Git tags or GitHub releases.
 
@@ -42,6 +42,7 @@ under ignored `.agent/test-results/`. `dist/` is also generated and ignored.
 - Named projects with durable file identities and an explicit entry file
 - Multi-file and relative-folder BAT, CONFIG.SYS, and text import
 - DOS-aware rename, deletion, collision, and path diagnostics
+- Session-retained operational health and privacy-safe diagnostics export
 - Label-oriented flow diagrams and source/split views
 - Blocks for conditions, jumps, calls, variables, pipelines, comments,
   interpreter commands, and external commands
@@ -55,7 +56,7 @@ under ignored `.agent/test-results/`. `dist/` is also generated and ignored.
 The supported text boundary is UTF-8 with CRLF, LF, or CR line endings; BATFlow
 does not guess legacy DOS code pages. Review the
 [compatibility boundary](docs/COMPATIBILITY.md), [project format](docs/PROJECT_FORMAT.md),
-[roadmap](docs/ROADMAP.md), and baseline
+[diagnostics boundary](docs/DIAGNOSTICS.md), [roadmap](docs/ROADMAP.md), and baseline
 [project assessment](docs/PROJECT_ASSESSMENT.md).
 
 ## Development policy
