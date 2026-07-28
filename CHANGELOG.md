@@ -1,11 +1,12 @@
 # Changelog
 
-BATFlow follows Semantic Versioning for product releases. The project-format,
-browser-storage, and interpreter-profile versions are managed separately.
+BATFlow uses Semantic Versioning for managed development milestones. Formal Git
+tags and GitHub releases begin at `1.0.0`. The project-format, browser-storage,
+and interpreter-profile versions are managed separately.
 
-## 0.5.0 — release candidate
+## 0.5.0 — development baseline
 
-This is the first release managed in Git. Earlier development used the name
+This is the first version managed in Git. Earlier development used the name
 `passes` and informal pass numbers; that history predates repository
 provenance and has not been fabricated as commits.
 
@@ -38,5 +39,6 @@ provenance and has not been fabricated as commits.
   blank-line diagram clutter, browser cache revisioning, and project download
   filenames.
 
-The release remains untagged until its draft pull request passes CI and a human
-completes the packaged-artifact checklist.
+The approved baseline was merged after human verification and successful CI.
+It is intentionally untagged and unpublished while pre-1.0 development
+continues.

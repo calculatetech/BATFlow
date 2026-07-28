@@ -3,7 +3,7 @@ import {
   norm,
   parseBatch,
   resolveBatchTarget,
-} from "./lib/batch-core.js?v=0.5.0-rc4";
+} from "./lib/batch-core.js?v=0.5.0-dev";
 import {
   PRODUCT_VERSION,
   ProjectFormatError,
@@ -15,15 +15,15 @@ import {
   importProjectDocument,
   serializeProject,
   updateFileContent,
-} from "./lib/project-format.js?v=0.5.0-rc4";
+} from "./lib/project-format.js?v=0.5.0-dev";
 import {
   loadCurrentProject,
   saveCurrentProject,
-} from "./lib/storage.js?v=0.5.0-rc4";
+} from "./lib/storage.js?v=0.5.0-dev";
 import {
   collectOutcomeRequests,
   simulate,
-} from "./lib/simulation.js?v=0.5.0-rc4";
+} from "./lib/simulation.js?v=0.5.0-dev";
 
 const $ = (id) => document.getElementById(id);
 const state = {
@@ -579,8 +579,8 @@ function applyView() {
 
 function updateStatus() {
   $("statusText").textContent = state.parsed
-    ? `${state.currentFile} · ${state.parsed.blocks.length} lines · v${PRODUCT_VERSION} · candidate 4`
-    : `v${PRODUCT_VERSION} · candidate 4`;
+    ? `${state.currentFile} · ${state.parsed.blocks.length} lines · v${PRODUCT_VERSION} · development`
+    : `v${PRODUCT_VERSION} · development`;
   const exportButton = $("exportBat");
   exportButton.disabled = !state.currentFile;
 }

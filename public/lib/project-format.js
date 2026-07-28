@@ -4,7 +4,7 @@ import {
   makeOpaqueId,
   reconcileLineIds,
   splitSource,
-} from "./batch-core.js?v=0.5.0-rc4";
+} from "./batch-core.js?v=0.5.0-dev";
 
 export const PRODUCT_NAME = "BATFlow";
 export const PRODUCT_VERSION = "0.5.0";

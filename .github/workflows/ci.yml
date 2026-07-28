@@ -44,7 +44,7 @@ jobs:
         env:
           BATFLOW_TEST_RESULTS_DIR: ${{ runner.temp }}/batflow-test-results
 
-      - name: Build and verify release archive
+      - name: Build and verify deployment bundle
         run: |
           npm run package
           npm run verify:package
@@ -56,17 +56,6 @@ jobs:
 
       - name: Audit dependencies
         run: npm audit
-
-      - name: Upload release candidate for human verification
-        if: github.event_name == 'pull_request'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: batflow-0.5.0-${{ github.event.pull_request.head.sha }}
-          path: |
-            ${{ runner.temp }}/batflow-artifacts/batflow-0.5.0.zip
-            ${{ runner.temp }}/batflow-artifacts/batflow-0.5.0.zip.sha256
-          if-no-files-found: error
-          retention-days: 14
 
       - name: Confirm checks did not rewrite tracked files
         run: git diff --exit-code

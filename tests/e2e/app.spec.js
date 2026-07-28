@@ -11,7 +11,7 @@ test("starts empty, exposes the managed version, and has no serious axe violatio
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "BATFlow" })).toBeVisible();
   await expect(page.locator("#statusText")).toContainText("v0.5.0");
-  await expect(page.locator("#statusText")).toContainText("candidate 4");
+  await expect(page.locator("#statusText")).toContainText("development");
   await expect(page.getByText("No file selected.").first()).toBeVisible();
 
   await page.addScriptTag({ path: axePath });
