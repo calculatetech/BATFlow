@@ -4,13 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>BATFlow — DOS 7.1 Visual Batch Editor</title>
-    <link rel="stylesheet" href="styles.css?v=0.5.0-dev" />
+    <link rel="stylesheet" href="styles.css?v=0.5.1-dev" />
   </head>
   <body>
     <header class="topbar">
       <div>
         <h1>BATFlow</h1>
-        <span>Win98 MS-DOS 7.1 visual batch editor · v0.5.0 · development</span>
+        <span>Win98 MS-DOS 7.1 visual batch editor · v0.5.1 · development</span>
       </div>
       <div class="toolbar">
         <button id="newProject" type="button">New project</button>
@@ -44,6 +44,9 @@
                 aria-pressed="true"
               >
                 Trace: On
+              </button>
+              <button id="resetSimulation" type="button" disabled>
+                Reset inputs
               </button>
             </div>
             <div id="traceSummary" class="trace-summary"></div>
@@ -119,6 +122,6 @@
       </aside>
     </main>
 
-    <script type="module" src="app.js?v=0.5.0-dev"></script>
+    <script type="module" src="app.js?v=0.5.1-dev"></script>
   </body>
 </html>

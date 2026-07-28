@@ -2,7 +2,7 @@ import {
   exportProjectDocument,
   importProjectDocument,
   validateProject,
-} from "./project-format.js?v=0.5.0-dev";
+} from "./project-format.js?v=0.5.1-dev";
 
 export const DATABASE_NAME = "batflow";
 export const DATABASE_VERSION = 1;
@@ -154,12 +154,19 @@ export async function loadCurrentProject(options = {}) {
   const raw = await readCurrent(database);
   if (raw) {
     const imported = importProjectDocument(raw);
-    if (imported.migrated) {
-      await writeCurrent(database, exportProjectDocument(imported.project));
+    let repairPersisted = true;
+    if (imported.migrated || imported.discardedSimulationOutcomes) {
+      try {
+        await writeCurrent(database, exportProjectDocument(imported.project));
+      } catch {
+        repairPersisted = false;
+      }
     }
     return {
       project: imported.project,
       migratedFrom: imported.migrated ? imported.sourceFormat : null,
+      discardedSimulationOutcomes: imported.discardedSimulationOutcomes,
+      repairPersisted,
     };
   }
 
@@ -169,6 +176,8 @@ export async function loadCurrentProject(options = {}) {
   return {
     project: legacy.project,
     migratedFrom: legacy.databaseName,
+    discardedSimulationOutcomes: legacy.discardedSimulationOutcomes,
+    repairPersisted: true,
   };
 }
 

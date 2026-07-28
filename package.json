@@ -1,11 +1,11 @@
 {
   "name": "batflow",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "private": true,
   "type": "module",
   "description": "A client-side visual editor and control-flow simulator for MS-DOS 7.1 batch files.",
   "scripts": {
-    "check:syntax": "node --check public/app.js && node --check public/lib/batch-core.js && node --check public/lib/project-format.js && node --check public/lib/simulation.js && node --check public/lib/storage.js",
+    "check:syntax": "node --check public/app.js && node --check public/lib/batch-core.js && node --check public/lib/project-format.js && node --check public/lib/save-queue.js && node --check public/lib/simulation.js && node --check public/lib/storage.js",
     "lint": "eslint .",
     "format:check": "prettier --check \"**/*.{css,html,js,json,md,mjs,yml}\"",
     "validate:html": "html-validate public/index.html",

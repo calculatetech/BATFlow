@@ -10,7 +10,12 @@ import {
   resetStorageConnectionForTests,
   saveCurrentProject,
 } from "../public/lib/storage.js";
-import { addTextFile, createProject } from "../public/lib/project-format.js";
+import {
+  addTextFile,
+  createProject,
+  exportProjectDocument,
+  updateProjectSimulationScenario,
+} from "../public/lib/project-format.js";
 
 async function putRaw(factory, databaseName, value) {
   const database = await new Promise((resolve, reject) => {
@@ -35,21 +40,59 @@ test.afterEach(async () => {
 
 test("current projects are stored in the stable database as versioned documents", async () => {
   const indexedDB = new IDBFactory();
-  const expected = addTextFile(
-    createProject("Stored"),
-    "MAIN.BAT",
-    "echo saved",
-  );
+  let expected = addTextFile(createProject("Stored"), "MAIN.BAT", "echo saved");
+  expected = updateProjectSimulationScenario(expected, {
+    variables: { mode: "SAFE" },
+    paths: { "C:\\TOOLS": "yes" },
+    outcomes: { "line:choice": 2 },
+  });
   await saveCurrentProject(expected, { indexedDB });
 
   const loaded = await loadCurrentProject({ indexedDB });
   assert.equal(loaded.project.name, "Stored");
   assert.equal(loaded.project.files["MAIN.BAT"].content, "echo saved");
+  assert.deepEqual(loaded.project.metadata.simulationScenario, {
+    variables: { mode: "SAFE" },
+    paths: { "c:\\tools": "yes" },
+    outcomes: { "line:choice": 2 },
+  });
   assert.equal(loaded.migratedFrom, null);
   assert.equal(
     (await indexedDB.databases()).some((item) => item.name === DATABASE_NAME),
     true,
   );
+});
+
+test("oversized stored outcomes are cleared without losing the project", async () => {
+  const indexedDB = new IDBFactory();
+  let project = addTextFile(
+    createProject("Recoverable"),
+    "MAIN.BAT",
+    "choice Continue",
+  );
+  project = updateProjectSimulationScenario(project, {
+    variables: { mode: "SAFE" },
+    paths: {},
+    outcomes: { choice: 2 },
+  });
+  const stored = exportProjectDocument(project);
+  stored.project.metadata.simulationScenario.outcomes.choice = 1e31;
+  await putRaw(indexedDB, DATABASE_NAME, stored);
+
+  const recovered = await loadCurrentProject({ indexedDB });
+  assert.equal(recovered.project.name, "Recoverable");
+  assert.equal(recovered.project.files["MAIN.BAT"].content, "choice Continue");
+  assert.deepEqual(recovered.project.metadata.simulationScenario, {
+    variables: { mode: "SAFE" },
+    paths: {},
+    outcomes: {},
+  });
+  assert.equal(recovered.discardedSimulationOutcomes, 1);
+  assert.equal(recovered.repairPersisted, true);
+
+  const reloaded = await loadCurrentProject({ indexedDB });
+  assert.equal(reloaded.discardedSimulationOutcomes, 0);
+  assert.equal(reloaded.project.files["MAIN.BAT"].content, "choice Continue");
 });
 
 for (const legacyName of LEGACY_DATABASE_NAMES) {

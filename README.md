@@ -3,7 +3,7 @@
 BATFlow is a static, client-side visual editor and control-flow simulator for
 Win98 MS-DOS 7.1 batch files.
 
-The current managed development baseline is `0.5.0`. BATFlow was formerly
+The current managed development baseline is `0.5.1`. BATFlow was formerly
 called `passes`. Pre-1.0 development uses structured `0.x` versions without
 formal Git tags or GitHub releases.
 
@@ -45,6 +45,7 @@ under ignored `.agent/test-results/`. `dist/` is also generated and ignored.
   interpreter commands, and external commands
 - Basic Win98 syntax validation
 - Variable, path-existence, and flow-relevant ERRORLEVEL simulation inputs
+- Project-scoped simulation inputs that persist across reload and export
 - Single-file control-flow traces with dynamic GOTO support
 - Block editing, duplication, deletion, and manual notes
 - `.batflow` project export and individual file export

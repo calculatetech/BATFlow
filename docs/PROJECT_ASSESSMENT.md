@@ -64,6 +64,7 @@ findings have these dispositions:
 | RM-09, DOC-01, DOC-02 | Closed by the priority roadmap, corrected deployment/development instructions, and reconciled release documentation. |
 | OP-01, OP-02 | Closed by serving only the runtime root and removing the broken in-application roadmap. |
 | DI-01 through DI-05 | Closed for the documented 0.5.0 boundary by confirmation gates, durable identities, explicit UTF-8/line-ending handling, a validated versioned format, and transaction-aware stable storage. |
+| DI-06 | Closed in 0.5.1 by a validated, project-scoped active scenario that persists through browser storage and `.batflow` export/import. |
 | FC-01 through FC-07 | Closed by pure parser/simulator modules and named unit/browser regressions for outcomes, stale traces, prefixes, quoting, target intent, limits, conditional flow, and EXIT. |
 | QA-01 | Closed by extracting browser-independent core modules with deterministic tests. |
 

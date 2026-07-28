@@ -8,12 +8,12 @@ import {
   parseDosArgs,
   resolveBatchTarget,
   stripCommandPrefix,
-} from "./batch-core.js?v=0.5.0-dev";
+} from "./batch-core.js?v=0.5.1-dev";
 
 function actionInfo(action, path, projectFiles) {
   const text = stripCommandPrefix(action);
-  let match = text.match(/^goto\s+(.+)$/i);
-  if (match) return { type: "goto", target: match[1] };
+  let match = text.match(/^goto(?:\s+(.*))?$/i);
+  if (match) return { type: "goto", target: match[1] || "" };
   match = text.match(/^set\s+([^=\s]+)=(.*)$/i);
   if (match) return { type: "set", name: match[1], value: match[2] };
   if (/^exit(?:\s|$)/i.test(text)) return { type: "exit" };
@@ -46,6 +46,15 @@ function producesOutcome(info) {
   return ["choice", "external", "pipeline"].includes(info.type);
 }
 
+function outcomeRequestKey(parsed, block, kind) {
+  return JSON.stringify([
+    parsed.path,
+    block.id,
+    kind,
+    stripCommandPrefix(block.raw).trim(),
+  ]);
+}
+
 export function collectOutcomeRequests(parsed, projectFiles = {}) {
   const requests = [];
   parsed.blocks.forEach((block, index) => {
@@ -58,7 +67,7 @@ export function collectOutcomeRequests(parsed, projectFiles = {}) {
       (block.kind === "command" && block.data.command === "choice")
     ) {
       requests.push({
-        key: block.id,
+        key: outcomeRequestKey(parsed, block, "command"),
         blockId: block.id,
         line: block.line,
         source: block.kind === "command" ? block.data.command : block.kind,
@@ -71,7 +80,7 @@ export function collectOutcomeRequests(parsed, projectFiles = {}) {
       const info = actionInfo(block.data.action, parsed.path, projectFiles);
       if (producesOutcome(info)) {
         requests.push({
-          key: `${block.id}:action`,
+          key: outcomeRequestKey(parsed, block, "conditional-action"),
           blockId: block.id,
           line: block.line,
           source: info.type,
@@ -129,15 +138,44 @@ export function simulate(parsed, scenario = {}, options = {}) {
 
   const jump = (target, block) => {
     const expanded = expand(target, environment.variables).replace(/^:/, "");
-    if (expanded.includes("%") || labelIndex[norm(expanded)] === undefined) {
-      status = "unresolved";
-      stop = `Unresolved GOTO ${expanded}`;
+    const event = block?.kind === "goto" ? "jump" : "branch";
+    const source = block?.kind === "goto" ? block.raw : `↳ GOTO ${target}`;
+    if (expanded.includes("%")) {
+      status = "input-required";
+      stop = `Input required for GOTO ${expanded}`;
+      if (block) {
+        trace.push(
+          traceRow(block, event, "GOTO target requires input", source, {
+            file: parsed.path,
+          }),
+        );
+      }
+      return false;
+    }
+    if (!expanded || labelIndex[norm(expanded)] === undefined) {
+      status = "terminated";
+      stop = expanded
+        ? `Batch terminated: label not found (${expanded})`
+        : "Batch terminated: GOTO label missing";
+      if (block) {
+        trace.push(
+          traceRow(
+            block,
+            event,
+            expanded
+              ? `Label not found: ${expanded}; batch terminated`
+              : "Required GOTO label missing; batch terminated",
+            source,
+            { file: parsed.path },
+          ),
+        );
+      }
       return false;
     }
     programCounter = labelIndex[norm(expanded)];
     if (block) {
       trace.push(
-        traceRow(block, "branch", `Jump to :${expanded}`, `↳ GOTO ${target}`, {
+        traceRow(block, event, `Jump to :${expanded}`, source, {
           file: parsed.path,
         }),
       );
@@ -147,7 +185,12 @@ export function simulate(parsed, scenario = {}, options = {}) {
 
   const applyOutcome = (key, block, source, event = "external") => {
     const configured = environment.outcomes[key];
-    if (configured === undefined || !Number.isFinite(Number(configured))) {
+    if (
+      configured === undefined ||
+      !Number.isInteger(Number(configured)) ||
+      Number(configured) < 0 ||
+      Number(configured) > 255
+    ) {
       trace.push(
         traceRow(
           block,
@@ -227,8 +270,13 @@ export function simulate(parsed, scenario = {}, options = {}) {
       }
       return "continued";
     }
-    if (producesOutcome(info) && outcomeRequests.has(`${block.id}:action`)) {
-      return applyOutcome(`${block.id}:action`, block, `↳ ${action}`, "branch")
+    const conditionalOutcomeKey = outcomeRequestKey(
+      parsed,
+      block,
+      "conditional-action",
+    );
+    if (producesOutcome(info) && outcomeRequests.has(conditionalOutcomeKey)) {
+      return applyOutcome(conditionalOutcomeKey, block, `↳ ${action}`, "branch")
         ? "continued"
         : "stopped";
     }
@@ -275,28 +323,27 @@ export function simulate(parsed, scenario = {}, options = {}) {
       continue;
     }
     if (block.kind === "goto") {
-      const target = expand(block.data.target, environment.variables).replace(
-        /^:/,
-        "",
-      );
-      trace.push(
-        traceRow(block, "jump", `Jump to :${target}`, block.raw, {
-          file: parsed.path,
-        }),
-      );
-      if (!jump(block.data.target)) break;
+      if (!jump(block.data.target, block)) break;
       continue;
     }
     if (block.kind === "if") {
       const result = evaluateIf(block.data, environment);
+      const conditionResult =
+        block.data.type === "errorlevel" && environment.errorlevel !== null
+          ? `${result ? "TRUE" : "FALSE"} · ${
+              block.data.negated ? "NOT (" : ""
+            }ERRORLEVEL ${environment.errorlevel} >= ${block.data.level}${
+              block.data.negated ? ")" : ""
+            }`
+          : result === null
+            ? "Unresolved"
+            : result
+              ? "TRUE"
+              : "FALSE";
       trace.push(
-        traceRow(
-          block,
-          "condition",
-          result === null ? "Unresolved" : result ? "TRUE" : "FALSE",
-          block.raw,
-          { file: parsed.path },
-        ),
+        traceRow(block, "condition", conditionResult, block.raw, {
+          file: parsed.path,
+        }),
       );
       if (result === null) {
         status = "input-required";
@@ -346,8 +393,9 @@ export function simulate(parsed, scenario = {}, options = {}) {
       block.kind === "external" ||
       (block.kind === "command" && block.data.command === "choice")
     ) {
-      if (outcomeRequests.has(block.id)) {
-        if (!applyOutcome(block.id, block, block.raw)) break;
+      const commandOutcomeKey = outcomeRequestKey(parsed, block, "command");
+      if (outcomeRequests.has(commandOutcomeKey)) {
+        if (!applyOutcome(commandOutcomeKey, block, block.raw)) break;
       } else {
         trace.push(
           traceRow(

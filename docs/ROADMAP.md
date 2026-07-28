@@ -2,7 +2,7 @@
 
 Last updated: July 28, 2026
 
-Current baseline: **0.5.0 development**
+Current baseline: **0.5.1 development**
 
 BATFlow, formerly called `passes`, is being converted from an unversioned
 prototype into a managed and genuinely usable application. The detailed audit
@@ -28,6 +28,8 @@ is the human-facing record of completed foundations and remaining priorities.
   `main` only after required CI succeeds and the pull request is merged.
 - CI-generated bundles validate packaging and reproducibility; they are not
   substitutes for human testing.
+- Code changes and major rework receive challenged adversarial review before
+  human approval. Simple documentation and progress updates are exempt.
 - Private fixtures live under ignored `docs/private/`. Detailed local results
   live under ignored `.agent/test-results/`; neither is committed.
 - Roadmap status changes accompany the work they describe.
@@ -60,9 +62,17 @@ Status: **Human-approved, CI-verified, and merged in pull request #1**
 This foundation makes changes manageable and testable. It is not a declaration
 that BATFlow is stable, complete, or ready for formal release.
 
+## Completed: 0.5.1 simulation-state hardening
+
+- Added one validated, project-scoped active simulation scenario.
+- Persisted variable, path-existence, and ERRORLEVEL inputs across file
+  switches, browser reloads, storage, and `.batflow` export/import.
+- Added a confirmed project-wide Reset inputs action.
+- Preserved CONFIG.SYS-derived defaults without storing them until simulation
+  input interaction.
+
 ## Priority 1: 0.5.x usability hardening
 
-- Project-scoped, durable simulation scenarios.
 - Project naming and richer file identity and collision controls.
 - Structured diagnostics beyond the current save and import status.
 - Broader browser compatibility, cache behavior, and offline behavior.
