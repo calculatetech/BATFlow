@@ -667,10 +667,13 @@ export function parseBatch(text, path, options = {}) {
       (item) => norm(item.name) === "config",
     );
     if (configVariable) {
-      for (const value of configInfo.menuItems) {
-        if (!configVariable.values.includes(value))
-          configVariable.values.push(value);
-      }
+      const menuKeys = new Set(
+        configInfo.menuItems.map((value) => norm(value)),
+      );
+      configVariable.values = [
+        ...configInfo.menuItems,
+        ...configVariable.values.filter((value) => !menuKeys.has(norm(value))),
+      ];
     }
   }
 

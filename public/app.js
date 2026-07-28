@@ -3,7 +3,7 @@ import {
   norm,
   parseBatch,
   resolveBatchTarget,
-} from "./lib/batch-core.js";
+} from "./lib/batch-core.js?v=0.5.0-rc4";
 import {
   PRODUCT_VERSION,
   ProjectFormatError,
@@ -15,9 +15,15 @@ import {
   importProjectDocument,
   serializeProject,
   updateFileContent,
-} from "./lib/project-format.js";
-import { loadCurrentProject, saveCurrentProject } from "./lib/storage.js";
-import { collectOutcomeRequests, simulate } from "./lib/simulation.js";
+} from "./lib/project-format.js?v=0.5.0-rc4";
+import {
+  loadCurrentProject,
+  saveCurrentProject,
+} from "./lib/storage.js?v=0.5.0-rc4";
+import {
+  collectOutcomeRequests,
+  simulate,
+} from "./lib/simulation.js?v=0.5.0-rc4";
 
 const $ = (id) => document.getElementById(id);
 const state = {
@@ -80,6 +86,10 @@ function parseCurrent() {
     lineIds: state.project.metadata.lineIds[state.currentFile],
     projectFiles: state.project.files,
   });
+  const configDefault = state.parsed.configInfo?.menuDefault;
+  if (configDefault && !Object.hasOwn(state.simValues.variables, "config")) {
+    state.simValues.variables.config = configDefault;
+  }
   if (
     state.selectedId &&
     !state.parsed.blocks.some((block) => block.id === state.selectedId)
@@ -182,6 +192,7 @@ function renderDiagram() {
             .join("")
         : '<span class="label-badge">ENTRY</span>';
       const blocks = section.blocks
+        .filter((block) => block.kind !== "blank")
         .map((block) => blockHtml(block, tracedIds.has(block.id)))
         .join("");
       return (
@@ -267,8 +278,29 @@ function selectBlock(id) {
   state.selectedId = id;
   renderDiagram();
   renderInspector();
+  const block = state.parsed?.blocks.find((item) => item.id === id);
   const element = document.querySelector(`.block[data-id="${CSS.escape(id)}"]`);
   element?.scrollIntoView({ behavior: "smooth", block: "center" });
+  if (block && (state.view === "split" || state.view === "source")) {
+    jumpSourceToLine(block.line);
+  }
+}
+
+function jumpSourceToLine(lineIndex) {
+  const source = $("sourceView");
+  const lines = source.value.split("\n");
+  const start = lines
+    .slice(0, lineIndex)
+    .reduce((offset, line) => offset + line.length + 1, 0);
+  const end = start + (lines[lineIndex]?.length || 0);
+  source.focus();
+  source.setSelectionRange(start, end);
+  const lineHeight =
+    Number.parseFloat(getComputedStyle(source).lineHeight) || 20;
+  source.scrollTop = Math.max(
+    0,
+    lineIndex * lineHeight - source.clientHeight / 2,
+  );
 }
 
 function renderInspector() {
@@ -391,10 +423,30 @@ function renderSimulationInputs() {
   const variables = state.parsed.variables
     .map((item) => {
       const key = norm(item.name);
+      const saved = state.simValues.variables[key] || "";
+      if (item.values.length) {
+        const known = item.values.includes(saved);
+        const custom = Boolean(saved && !known);
+        return (
+          `<div class="sim-input"><label for="var-${escapeAttr(key)}">%${escapeHtml(item.name)}%</label>` +
+          `<select id="var-${escapeAttr(key)}" data-var="${escapeAttr(key)}">` +
+          '<option value="">— choose —</option>' +
+          item.values
+            .map(
+              (value) =>
+                `<option value="${escapeAttr(value)}" ${saved === value ? "selected" : ""}>` +
+                `${escapeHtml(value)}</option>`,
+            )
+            .join("") +
+          `<option value="__custom" ${custom ? "selected" : ""}>Custom…</option></select>` +
+          `<input ${custom ? "" : 'class="hidden"'} data-custom="${escapeAttr(key)}" ` +
+          `value="${custom ? escapeAttr(saved) : ""}" placeholder="custom value"></div>`
+        );
+      }
       return (
         `<div class="sim-input"><label for="var-${escapeAttr(key)}">%${escapeHtml(item.name)}%</label>` +
         `<input id="var-${escapeAttr(key)}" data-var="${escapeAttr(key)}" ` +
-        `value="${escapeAttr(state.simValues.variables[key] || "")}" placeholder="value"></div>`
+        `value="${escapeAttr(saved)}" placeholder="value"></div>`
       );
     })
     .join("");
@@ -425,16 +477,28 @@ function renderSimulationInputs() {
     variables +
     paths +
     (outcomes ? `<h3 class="sim-subhead">Flow outcomes</h3>${outcomes}` : "");
+  const updateSimulation = () => {
+    collectSimulationValues();
+    recalculateTrace();
+    renderDiagram();
+    renderTraceView();
+    updateTraceSummary();
+  };
+  document.querySelectorAll("select[data-var]").forEach((select) => {
+    select.onchange = () => {
+      const custom = document.querySelector(
+        `[data-custom="${CSS.escape(select.dataset.var)}"]`,
+      );
+      custom.classList.toggle("hidden", select.value !== "__custom");
+      updateSimulation();
+    };
+  });
   document
-    .querySelectorAll("[data-var], [data-path], [data-outcome]")
+    .querySelectorAll(
+      "input[data-var], [data-custom], [data-path], [data-outcome]",
+    )
     .forEach((control) => {
-      control.oninput = () => {
-        collectSimulationValues();
-        recalculateTrace();
-        renderDiagram();
-        renderTraceView();
-        updateTraceSummary();
-      };
+      control.oninput = updateSimulation;
     });
   updateTraceSummary();
 }
@@ -443,8 +507,16 @@ function collectSimulationValues() {
   const variables = {};
   const paths = {};
   const outcomes = {};
-  document.querySelectorAll("[data-var]").forEach((input) => {
-    if (input.value) variables[input.dataset.var] = input.value;
+  document.querySelectorAll("[data-var]").forEach((control) => {
+    let value = control.value;
+    if (control.tagName === "SELECT" && value === "__custom") {
+      value = document.querySelector(
+        `[data-custom="${CSS.escape(control.dataset.var)}"]`,
+      ).value;
+    }
+    if (value && value !== "__custom") {
+      variables[control.dataset.var] = value;
+    }
   });
   document.querySelectorAll("[data-path]").forEach((select) => {
     paths[select.dataset.path] = select.value;
@@ -507,8 +579,8 @@ function applyView() {
 
 function updateStatus() {
   $("statusText").textContent = state.parsed
-    ? `${state.currentFile} · ${state.parsed.blocks.length} lines · v${PRODUCT_VERSION}`
-    : `v${PRODUCT_VERSION}`;
+    ? `${state.currentFile} · ${state.parsed.blocks.length} lines · v${PRODUCT_VERSION} · candidate 4`
+    : `v${PRODUCT_VERSION} · candidate 4`;
   const exportButton = $("exportBat");
   exportButton.disabled = !state.currentFile;
 }
@@ -524,9 +596,7 @@ function download(name, content, type = "text/plain") {
 async function importSelection(fileList) {
   const files = [...fileList];
   if (!files.length) return;
-  const projectFiles = files.filter((file) =>
-    /\.batflow\.json$/i.test(file.name),
-  );
+  const projectFiles = files.filter((file) => /\.batflow$/i.test(file.name));
   if (projectFiles.length) {
     if (files.length !== 1) {
       throw new ProjectFormatError(
@@ -605,9 +675,9 @@ $("newProject").onclick = async () => {
 
 $("exportProject").onclick = () => {
   download(
-    `${state.project.name || "project"}.batflow.json`,
+    `${state.project.name || "project"}.batflow`,
     serializeProject(state.project),
-    "application/json",
+    "application/octet-stream",
   );
 };
 

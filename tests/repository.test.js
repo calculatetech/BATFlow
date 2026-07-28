@@ -69,8 +69,16 @@ test("the public UI has no private example loader or in-app roadmap", () => {
 
 test("the public HTML references only present runtime assets", () => {
   const html = read("public/index.html");
-  assert.match(html, /href="styles\.css"/);
-  assert.match(html, /src="app\.js"/);
+  assert.match(html, /href="styles\.css\?v=0\.5\.0-rc4"/);
+  assert.match(html, /src="app\.js\?v=0\.5\.0-rc4"/);
+  for (const module of [
+    "public/app.js",
+    "public/lib/project-format.js",
+    "public/lib/simulation.js",
+    "public/lib/storage.js",
+  ]) {
+    assert.match(read(module), /\.js\?v=0\.5\.0-rc4/);
+  }
   assert.doesNotThrow(() => read("public/styles.css"));
   assert.doesNotThrow(() => read("public/app.js"));
 });

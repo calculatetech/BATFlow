@@ -8,7 +8,7 @@ import {
   parseDosArgs,
   resolveBatchTarget,
   stripCommandPrefix,
-} from "./batch-core.js";
+} from "./batch-core.js?v=0.5.0-rc4";
 
 function actionInfo(action, path, projectFiles) {
   const text = stripCommandPrefix(action);
@@ -98,8 +98,14 @@ export function simulate(parsed, scenario = {}, options = {}) {
   const projectFiles = options.projectFiles || {};
   const maxSteps = options.maxSteps ?? 1000;
   const maxVisits = options.maxVisits ?? 100;
+  const variables = Object.fromEntries(
+    Object.entries(scenario.variables || {}).map(([name, value]) => [
+      norm(name),
+      norm(name) === "config" ? String(value).toLowerCase() : value,
+    ]),
+  );
   const environment = {
-    variables: { ...(scenario.variables || {}) },
+    variables,
     paths: { ...(scenario.paths || {}) },
     outcomes: { ...(scenario.outcomes || {}) },
     errorlevel: scenario.errorlevel ?? null,

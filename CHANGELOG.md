@@ -26,6 +26,7 @@ provenance and has not been fabricated as commits.
 - UTF-8 and line-ending behavior is explicit and validated.
 - New Project, project replacement, and filename collision operations require
   confirmation when they would overwrite work.
+- Project files use the canonical `.batflow` extension.
 
 ### Fixed
 
@@ -33,6 +34,9 @@ provenance and has not been fabricated as commits.
   consecutive labels, CHOICE outcomes, conditional transfers, EXIT handling,
   and step-limit reporting.
 - Silent storage/import failures and stale empty-state panels.
+- CONFIG.SYS menu generation/default evaluation, Split-view source selection,
+  blank-line diagram clutter, browser cache revisioning, and project download
+  filenames.
 
 The release remains untagged until its draft pull request passes CI and a human
 completes the packaged-artifact checklist.

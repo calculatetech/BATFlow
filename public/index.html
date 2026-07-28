@@ -4,13 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>BATFlow — DOS 7.1 Visual Batch Editor</title>
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="styles.css?v=0.5.0-rc4" />
   </head>
   <body>
     <header class="topbar">
       <div>
         <h1>BATFlow</h1>
-        <span>Win98 MS-DOS 7.1 visual batch editor · v0.5.0</span>
+        <span>Win98 MS-DOS 7.1 visual batch editor · v0.5.0 · candidate 4</span>
       </div>
       <div class="toolbar">
         <button id="newProject" type="button">New project</button>
@@ -19,7 +19,7 @@
             id="fileInput"
             type="file"
             multiple
-            accept=".bat,.sys,.txt,.batflow.json"
+            accept=".bat,.sys,.txt,.batflow"
         /></label>
         <button id="exportProject" type="button">Export project</button>
         <button id="exportBat" type="button">Export current BAT</button>
@@ -119,6 +119,6 @@
       </aside>
     </main>
 
-    <script type="module" src="app.js"></script>
+    <script type="module" src="app.js?v=0.5.0-rc4"></script>
   </body>
 </html>

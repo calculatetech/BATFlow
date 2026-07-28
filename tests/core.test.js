@@ -198,3 +198,48 @@ test("the global step limit is never reported as completion", () => {
   assert.equal(result.status, "step-limit");
   assert.equal(result.stop, "Step limit reached (1000)");
 });
+
+test("CONFIG.SYS menu values are authoritative and case-deduplicated", () => {
+  const source = [
+    "if %config%==normal goto normal",
+    "goto %config%",
+    ":normal",
+  ].join("\r\n");
+  const parsed = parse(source, "AUTOEXEC.BAT", {
+    "AUTOEXEC.BAT": { content: source },
+    "CONFIG.SYS": {
+      content: [
+        "[MENU]",
+        "MENUITEM=NORMAL,Normal startup",
+        "MENUITEM=SAFE,Safe startup",
+        "MENUDEFAULT=NORMAL,5",
+      ].join("\r\n"),
+    },
+  });
+  const config = parsed.variables.find(
+    (item) => item.name.toLowerCase() === "config",
+  );
+  assert.deepEqual(config.values, ["NORMAL", "SAFE"]);
+  assert.equal(parsed.configInfo.menuDefault, "NORMAL");
+});
+
+test("CONFIG.SYS selections compare using DOS config-value casing", () => {
+  const source = [
+    "if %config%==safe goto safe",
+    "echo continue",
+    "if %config%==normal goto normal",
+    "exit",
+    ":safe",
+    "exit",
+    ":normal",
+    "exit",
+  ].join("\r\n");
+  const result = simulate(parse(source), {
+    variables: { config: "NORMAL" },
+  });
+  const conditions = result.trace
+    .filter((row) => row.event === "condition")
+    .map((row) => row.result);
+  assert.deepEqual(conditions, ["FALSE", "TRUE"]);
+  assert.ok(result.trace.some((row) => row.result === "Entered :normal"));
+});

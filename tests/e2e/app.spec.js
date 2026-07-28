@@ -11,6 +11,7 @@ test("starts empty, exposes the managed version, and has no serious axe violatio
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "BATFlow" })).toBeVisible();
   await expect(page.locator("#statusText")).toContainText("v0.5.0");
+  await expect(page.locator("#statusText")).toContainText("candidate 4");
   await expect(page.getByText("No file selected.").first()).toBeVisible();
 
   await page.addScriptTag({ path: axePath });
@@ -36,6 +37,8 @@ test("imports, recalculates traces after editing, persists, and confirms replace
       buffer: Buffer.from(
         [
           "@echo off",
+          "",
+          'if "%config%"=="test" echo configured',
           "choice /c:YN Continue",
           "if errorlevel 2 goto no",
           "goto yes",
@@ -49,13 +52,20 @@ test("imports, recalculates traces after editing, persists, and confirms replace
     {
       name: "CONFIG.SYS",
       mimeType: "text/plain",
-      buffer: Buffer.from("[MENU]\r\nMENUITEM=yes,Yes\r\n"),
+      buffer: Buffer.from(
+        "[MENU]\r\nMENUITEM=TEST,Test configuration\r\nMENUDEFAULT=TEST,5\r\n",
+      ),
     },
   ]);
 
   await expect(
     page.getByRole("button", { name: "AUTOEXEC.BAT" }),
   ).toBeVisible();
+  await expect(page.locator('select[data-var="config"]')).toHaveValue("TEST");
+  await expect(
+    page.locator('select[data-var="config"] option[value="TEST"]'),
+  ).toHaveText("TEST");
+  await expect(page.locator(".kind-blank")).toHaveCount(0);
   await expect(page.locator("[data-outcome]")).toHaveCount(1);
   await expect(page.locator("#traceSummary")).toContainText(
     "outcome required",
@@ -63,6 +73,23 @@ test("imports, recalculates traces after editing, persists, and confirms replace
       ignoreCase: true,
     },
   );
+  await expect(page.locator("#traceSummary")).not.toContainText(
+    "Input required at line 2",
+  );
+
+  await page.getByRole("tab", { name: "Split" }).click();
+  await page.locator(".block").filter({ hasText: "choice /c:YN" }).click();
+  const selectedSource = await page
+    .locator("#sourceView")
+    .evaluate((source) =>
+      source.value.slice(source.selectionStart, source.selectionEnd),
+    );
+  expect(selectedSource).toContain("choice /c:YN");
+
+  await page.getByRole("tab", { name: "Execution trace" }).click();
+  await expect(
+    page.locator(".trace-row").filter({ hasText: "%config%" }),
+  ).toContainText("TRUE");
 
   await page.locator("[data-outcome]").fill("2");
   await expect(page.locator("#traceSummary")).toContainText(
@@ -103,6 +130,7 @@ test("exports a versioned project and rejects invalid import without replacement
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "Export project" }).click();
   const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe("Untitled.batflow");
   const stream = await download.createReadStream();
   let content = "";
   for await (const chunk of stream) content += chunk.toString();
@@ -111,7 +139,7 @@ test("exports a versioned project and rejects invalid import without replacement
   expect(document.createdBy.productVersion).toBe("0.5.0");
 
   await page.locator("#fileInput").setInputFiles({
-    name: "broken.batflow.json",
+    name: "broken.batflow",
     mimeType: "application/json",
     buffer: Buffer.from('{"formatVersion":999,"project":{}}'),
   });

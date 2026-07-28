@@ -1,6 +1,6 @@
 # BATFlow project format
 
-BATFlow 0.5.0 exports UTF-8 JSON files named `*.batflow.json`. The top-level
+BATFlow 0.5.0 exports UTF-8 JSON files named `*.batflow`. The top-level
 envelope keeps independent version domains:
 
 ```json

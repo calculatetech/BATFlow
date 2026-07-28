@@ -43,7 +43,10 @@ release tag.
       candidate under Node 24.
 - [x] (2026-07-27 01:13Z) Pushed commit `c1ed8dc`, opened draft pull request
       #1, and obtained passing push and pull-request `verify` CI runs.
-- [ ] Obtain human browser/data-migration verification and approval.
+- [x] (2026-07-28 14:54Z) Obtained owner approval for uncommitted candidate 4
+      after iterative browser testing with the private reference files.
+- [ ] Commit and push the exact approved tree, obtain green remote CI, and stop
+      before merge/tag authorization.
 
 ## Surprises & Discoveries
 
@@ -66,6 +69,11 @@ release tag.
   required Node 24 zlib despite fixed archive order and timestamps.
   Evidence: the initial checksums differed across runtimes; storing the small
   static files without compression now produces the same checksum under both.
+
+- Observation: Reusing one release-candidate query key across iterative local
+  fixes allowed the browser to retain an earlier module graph.
+  Evidence: candidate 3/4 now advances every entry-point and transitive module
+  URL together, and repository tests enforce the coherent cache revision.
 
 ## Decision Log
 
@@ -102,11 +110,11 @@ release tag.
 
 ## Outcomes & Retrospective
 
-The release candidate now passes static checks, 26 Node tests, three
+The owner-approved candidate 4 passes static checks, 28 Node tests, three
 Chromium acceptance tests including an axe accessibility scan, HTTP boundary
-checks, deterministic archive verification, and required remote CI. The
-remaining work is human verification of the exact CI archive; no merge or
-release tag has occurred.
+checks, and private-reference browser probes. The remaining work is to commit
+the exact approved tree, rerun deterministic packaging and required remote CI,
+and stop before merge or release tagging.
 
 ## Context and Orientation
 

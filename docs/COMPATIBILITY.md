@@ -13,7 +13,7 @@ Cross-file trace expansion remains planned for 0.6.0.
 ## Input boundary
 
 - Supported source imports: `.bat`, `.sys`, and `.txt`.
-- Supported project import/export: UTF-8 `.batflow.json`, format version 1.
+- Supported project import/export: UTF-8 `.batflow`, format version 1.
 - Supported source encoding: UTF-8 with or without a byte-order mark.
 - Preserved line endings: CRLF, LF, or CR. Mixed endings normalize on edit.
 - Unsupported: `.cmd`, binary data, guessed OEM/DOS code pages, absolute

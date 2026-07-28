@@ -1,6 +1,6 @@
 # BATFlow roadmap
 
-Last updated: July 27, 2026
+Last updated: July 28, 2026
 
 Current target: **stable 0.5.0**
 
@@ -52,7 +52,7 @@ The `0.5.0` milestone closes the release-blocking and high-priority gaps.
 
 ## Milestone: stable 0.5.0
 
-Status: **Release-candidate CI green; awaiting human verification**
+Status: **Candidate 4 human-approved; awaiting final CI and merge**
 
 ### Completed on the release-candidate branch
 
@@ -71,12 +71,16 @@ Status: **Release-candidate CI green; awaiting human verification**
   deterministic packaging, checksum, and private-path boundary checks.
 - Compatibility, format, changelog, release, and human-test documentation.
 - Draft pull request #1 is open and its required `verify` CI check passes.
+- Candidate 4 restores CONFIG.SYS-driven choices and DOS `%config%` evaluation,
+  synchronizes Split-view source selection, omits blank diagram blocks, exports
+  the canonical `.batflow` filename, and uses a coherent cache revision.
+- The project owner approved the uncommitted local candidate on July 28, 2026,
+  before its final commit as required by the revised review policy.
 
 ### Remaining release gate
 
-- Test the exact packaged archive with representative owner-supplied private
-  inputs using [the human checklist](HUMAN_TESTING.md).
-- Human-review and merge the pull request.
+- Commit and push the exact approved working tree without behavioral changes.
+- Obtain green required CI for that commit, then merge the pull request.
 - With explicit owner authorization, create annotated tag `v0.5.0` from the
   verified merge commit. The tag workflow must publish the matching archive and
   checksum.
@@ -107,7 +111,7 @@ After `0.5.0`, address remaining medium- and low-priority work:
 Once the managed foundation is stable, resume product expansion:
 
 - Cross-file CALL and direct-transfer execution traces.
-- ZIP-based `.batflow` import/export with nested paths.
+- ZIP-based `.batflow` containers with nested paths.
 - Undo/redo, generated-source diff, and durable edit history.
 - Saved scenarios, assertions, and branch exploration.
 - Explicit label operations, drag ordering, and command insertion.

@@ -46,7 +46,7 @@ under ignored `.agent/test-results/`. `dist/` is also generated and ignored.
 - Variable, path-existence, and flow-relevant ERRORLEVEL simulation inputs
 - Single-file control-flow traces with dynamic GOTO support
 - Block editing, duplication, deletion, and manual notes
-- JSON project export and individual file export
+- `.batflow` project export and individual file export
 
 The supported text boundary is UTF-8 with CRLF, LF, or CR line endings; BATFlow
 does not guess legacy DOS code pages. Review the
