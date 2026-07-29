@@ -7,7 +7,9 @@ afterward, human verification must be repeated before another commit.
 
 After approval, commit and push the exact reviewed tree. Required CI then
 confirms that the committed source reproduces the automated checks and
-deployment bundle. Keep screenshots and detailed logs outside Git.
+deployment bundle. Before merge, inspect all pull-request comments and review
+threads, address every actionable finding, and resolve every thread. Keep
+screenshots and detailed logs outside Git.
 
 ## Adversarial review gate
 
@@ -82,5 +84,6 @@ probe output belong under ignored `.agent/test-results/`, not in commits.
 ## Approval boundary
 
 After the owner approves the working tree, commit and push that exact tree.
-Merge only after required CI passes. Do not create formal Git tags or GitHub
+Merge only after required CI passes and all pull-request comments and review
+threads are addressed and resolved. Do not create formal Git tags or GitHub
 releases before `1.0.0`.

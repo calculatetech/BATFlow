@@ -86,9 +86,30 @@ for (const asset of ["app.js", "lib/diagnostics.js"]) {
     await expect(page.locator("#diagnosticsEvents")).toContainText(
       "runtime.asset.failed",
     );
+    await expect(page.locator("#diagnosticsEvents")).toContainText("app.js");
     await page.getByRole("button", { name: "Close" }).click();
   });
 }
+
+test("fallback diagnostics preserve early runtime error codes and details", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    globalThis.addEventListener("DOMContentLoaded", () => {
+      throw new Error("EARLY-RUNTIME-DETAIL");
+    });
+  });
+  await page.route("**/app.js?*", (route) => route.abort());
+  await page.goto("/");
+
+  await page.getByRole("button", { name: "Diagnostics: Error" }).click();
+  await expect(page.locator("#diagnosticsEvents")).toContainText(
+    "runtime.error",
+  );
+  await expect(page.locator("#diagnosticsEvents")).toContainText(
+    "EARLY-RUNTIME-DETAIL",
+  );
+});
 
 test("imports, recalculates traces after editing, persists, and confirms replacement", async ({
   page,

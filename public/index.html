@@ -29,6 +29,50 @@
             code,
             detail: String(detail || "").slice(0, 4096),
           });
+          early.events = early.events.slice(-100);
+        };
+        const summaries = {
+          "runtime.asset.failed":
+            "A required application asset failed to load.",
+          "runtime.error": "An unexpected startup error occurred.",
+          "runtime.rejection":
+            "An unexpected asynchronous startup error occurred.",
+        };
+
+        const renderFallback = () => {
+          const overall = document.getElementById("diagnosticsOverall");
+          const heading = document.createElement("strong");
+          const explanation = document.createElement("span");
+          heading.textContent = "Error";
+          explanation.textContent =
+            "BATFlow could not start. Review the captured startup failures below.";
+          overall.replaceChildren(heading, explanation);
+
+          const events = document.getElementById("diagnosticsEvents");
+          const articles = [...early.events].reverse().map((event) => {
+            const code = Object.hasOwn(summaries, event.code)
+              ? event.code
+              : "runtime.error";
+            const article = document.createElement("article");
+            const summary = document.createElement("strong");
+            const codeElement = document.createElement("code");
+            article.className = "diagnostic-event error";
+            summary.textContent = summaries[code];
+            codeElement.textContent = code;
+            article.append(summary, codeElement);
+            if (event.detail) {
+              const details = document.createElement("details");
+              const detailsSummary = document.createElement("summary");
+              const detail = document.createElement("pre");
+              details.open = true;
+              detailsSummary.textContent = "Technical details";
+              detail.textContent = event.detail;
+              details.append(detailsSummary, detail);
+              article.append(details);
+            }
+            return article;
+          });
+          events.replaceChildren(...articles);
         };
 
         globalThis.addEventListener(
@@ -59,10 +103,7 @@
           badge.textContent = "Error";
           button.addEventListener("click", () => {
             if (early.startupComplete) return;
-            document.getElementById("diagnosticsOverall").innerHTML =
-              "<strong>Error</strong><span>BATFlow could not start because a required application asset failed.</span>";
-            document.getElementById("diagnosticsEvents").innerHTML =
-              "<article class='diagnostic-event error'><strong>A required application asset failed to load.</strong><code>runtime.asset.failed</code></article>";
+            renderFallback();
             document.getElementById("clearDiagnostics").disabled = true;
             document.getElementById("exportDiagnostics").disabled = true;
             document.getElementById("diagnosticsDialog").showModal();
