@@ -15,7 +15,7 @@ jobs:
   verify:
     name: verify
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
 
     steps:
       - name: Check out source
@@ -33,8 +33,8 @@ jobs:
       - name: Run repository checks
         run: npm run check
 
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+      - name: Install supported browsers
+        run: npx playwright install --with-deps chromium firefox webkit
 
       - name: Run browser acceptance
         run: npm run test:e2e

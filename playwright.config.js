@@ -18,7 +18,7 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   webServer: {
-    command: "python3 -m http.server 41740 --bind 127.0.0.1 --directory public",
+    command: "node scripts/test-server.mjs",
     url: "http://127.0.0.1:41740",
     reuseExistingServer: false,
   },
@@ -26,6 +26,14 @@ export default defineConfig({
     {
       name: "chromium",
       use: { browserName: "chromium" },
+    },
+    {
+      name: "firefox",
+      use: { browserName: "firefox" },
+    },
+    {
+      name: "webkit",
+      use: { browserName: "webkit" },
     },
   ],
 });

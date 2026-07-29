@@ -3,7 +3,7 @@ import {
   norm,
   parseBatch,
   resolveBatchTarget,
-} from "./lib/batch-core.js?v=0.5.3-dev";
+} from "./lib/batch-core.js?v=0.5.4-dev.7";
 import {
   INTERPRETER_PROFILE,
   PROJECT_FORMAT_VERSION,
@@ -26,24 +26,38 @@ import {
   updateFileContent,
   updateProjectName,
   updateProjectSimulationScenario,
-} from "./lib/project-format.js?v=0.5.3-dev";
+} from "./lib/project-format.js?v=0.5.4-dev.7";
 import {
   DATABASE_VERSION,
   loadCurrentProject,
   saveCurrentProject,
-} from "./lib/storage.js?v=0.5.3-dev";
-import { createSaveQueue } from "./lib/save-queue.js?v=0.5.3-dev";
+} from "./lib/storage.js?v=0.5.4-dev.7";
+import { createSaveQueue } from "./lib/save-queue.js?v=0.5.4-dev.7";
 import {
   DIAGNOSTICS_FORMAT_VERSION,
   createDiagnosticsDocument,
   createDiagnosticsStore,
-} from "./lib/diagnostics.js?v=0.5.3-dev";
+} from "./lib/diagnostics.js?v=0.5.4-dev.7";
 import {
   collectOutcomeRequests,
   simulate,
-} from "./lib/simulation.js?v=0.5.3-dev";
+} from "./lib/simulation.js?v=0.5.4-dev.7";
+import {
+  SHELL_REVISION,
+  ensureStoragePersistence,
+} from "./lib/browser-runtime.js?v=0.5.4-dev.7";
 
 const $ = (id) => document.getElementById(id);
+const CONNECTIVITY_SESSION_KEY = "batflow:connectivity:offline:v1";
+
+function retainedOfflineState() {
+  try {
+    return globalThis.sessionStorage?.getItem(CONNECTIVITY_SESSION_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 const state = {
   project: createProject(),
   currentFile: null,
@@ -56,9 +70,18 @@ const state = {
   message: "",
   messageKind: "",
   pendingImport: null,
+  offlineCache: "checking",
+  offline: globalThis.navigator?.onLine === false || retainedOfflineState(),
+  storageDurability: "unknown",
+  activeShellRevision: SHELL_REVISION,
 };
 const diagnostics = createDiagnosticsStore();
 const earlyDiagnostics = globalThis.__batflowEarlyDiagnostics;
+let offlineRegistration = null;
+let reloadForUpdate = false;
+let updateActivationTimer = null;
+let pendingUpdateWorker = null;
+let connectivityProbeTimer = null;
 
 function escapeHtml(value) {
   return String(value ?? "").replace(
@@ -212,6 +235,228 @@ function parseCurrent() {
 
 function queueSave({ immediate = false } = {}) {
   return projectSaveQueue.queue(state.project, { immediate });
+}
+
+function renderConnectivity() {
+  $("offlineStatus").classList.toggle("hidden", !state.offline);
+}
+
+function scheduleConnectivityProbe() {
+  if (!state.offline || connectivityProbeTimer !== null) return;
+  connectivityProbeTimer = globalThis.setTimeout(async () => {
+    connectivityProbeTimer = null;
+    try {
+      const response = await fetch(
+        `./service-worker.js?connectivity=${Date.now()}`,
+        {
+          cache: "no-store",
+          method: "HEAD",
+        },
+      );
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      state.offline = false;
+      renderConnectivity();
+      renderDiagnostics();
+      void checkForShellUpdate();
+    } catch {
+      scheduleConnectivityProbe();
+    }
+  }, 1000);
+}
+
+function setConnectivity(offline) {
+  state.offline = Boolean(offline);
+  try {
+    if (state.offline) {
+      globalThis.sessionStorage?.setItem(CONNECTIVITY_SESSION_KEY, "1");
+    } else {
+      globalThis.sessionStorage?.removeItem(CONNECTIVITY_SESSION_KEY);
+    }
+  } catch {
+    // Connectivity still remains visible for the current document.
+  }
+  renderConnectivity();
+  renderDiagnostics();
+  if (state.offline) scheduleConnectivityProbe();
+}
+
+function setOfflineCacheState(status, detail) {
+  state.offlineCache = status;
+  setDiagnosticSubsystem(
+    "cache",
+    status === "ready"
+      ? "healthy"
+      : status === "checking"
+        ? "checking"
+        : "attention",
+    { detail },
+  );
+}
+
+function showAvailableUpdate(worker) {
+  if (!worker || worker === pendingUpdateWorker) return;
+  pendingUpdateWorker = worker;
+  $("applyUpdate").classList.remove("hidden");
+  recordDiagnostic({
+    severity: "info",
+    subsystem: "cache",
+    code: "cache.update.ready",
+    detail: "A newer offline shell is installed and waiting.",
+  });
+}
+
+function watchInstallingWorker(worker) {
+  if (!worker) return;
+  worker.addEventListener("statechange", () => {
+    if (worker.state === "installed") {
+      if (globalThis.navigator.serviceWorker.controller) {
+        showAvailableUpdate(offlineRegistration?.waiting || worker);
+      }
+      return;
+    }
+    if (worker.state !== "redundant") return;
+    if (offlineRegistration?.active) {
+      recordDiagnostic({
+        severity: "warning",
+        subsystem: "cache",
+        code: "cache.update.failed",
+        detail: "The existing offline shell remains active.",
+      });
+    } else {
+      setOfflineCacheState(
+        "failed",
+        "The offline application shell could not be installed.",
+      );
+      recordDiagnostic({
+        severity: "warning",
+        subsystem: "cache",
+        code: "cache.install.failed",
+        detail: "The service worker installation became redundant.",
+      });
+    }
+  });
+}
+
+function requestWorkerStatus() {
+  const worker =
+    globalThis.navigator.serviceWorker.controller ||
+    offlineRegistration?.active;
+  worker?.postMessage({ type: "BATFLOW_STATUS_REQUEST" });
+}
+
+async function registerOfflineShell() {
+  if (!("serviceWorker" in globalThis.navigator)) {
+    setOfflineCacheState(
+      "unavailable",
+      "Service workers are unsupported in this browser or context.",
+    );
+    recordDiagnostic({
+      severity: "warning",
+      subsystem: "cache",
+      code: "cache.install.failed",
+      detail: "The Service Worker API is unavailable.",
+    });
+    return;
+  }
+
+  globalThis.navigator.serviceWorker.addEventListener("message", (event) => {
+    if (event.data?.type !== "BATFLOW_STATUS") return;
+    if (event.data.offline === true || !state.offline) {
+      setConnectivity(event.data.offline);
+    }
+    state.activeShellRevision =
+      typeof event.data.shellRevision === "string"
+        ? event.data.shellRevision
+        : SHELL_REVISION;
+    if (event.data.cacheReady) {
+      setOfflineCacheState("ready", `Ready · ${state.activeShellRevision}`);
+    }
+  });
+  globalThis.navigator.serviceWorker.addEventListener(
+    "controllerchange",
+    () => {
+      pendingUpdateWorker = null;
+      $("applyUpdate").classList.add("hidden");
+      if (reloadForUpdate) {
+        reloadForUpdate = false;
+        if (updateActivationTimer !== null) {
+          globalThis.clearTimeout(updateActivationTimer);
+          updateActivationTimer = null;
+        }
+        globalThis.location.reload();
+        return;
+      }
+      requestWorkerStatus();
+    },
+  );
+
+  try {
+    offlineRegistration = await globalThis.navigator.serviceWorker.register(
+      `./service-worker.js?v=${SHELL_REVISION}`,
+      {
+        scope: "./",
+        updateViaCache: "none",
+      },
+    );
+    offlineRegistration.addEventListener("updatefound", () =>
+      watchInstallingWorker(offlineRegistration.installing),
+    );
+    watchInstallingWorker(offlineRegistration.installing);
+    if (
+      offlineRegistration.waiting &&
+      globalThis.navigator.serviceWorker.controller
+    ) {
+      showAvailableUpdate(offlineRegistration.waiting);
+    }
+    const ready = await globalThis.navigator.serviceWorker.ready;
+    offlineRegistration = ready;
+    setOfflineCacheState("ready", `Ready · ${SHELL_REVISION}`);
+    recordDiagnostic({
+      severity: "info",
+      subsystem: "cache",
+      code: "cache.install.ready",
+      detail: `Offline shell ${SHELL_REVISION} is ready.`,
+    });
+    requestWorkerStatus();
+  } catch (error) {
+    setOfflineCacheState("failed", errorDetail(error));
+    recordDiagnostic({
+      severity: "warning",
+      subsystem: "cache",
+      code: "cache.install.failed",
+      detail: errorDetail(error),
+    });
+  }
+}
+
+async function checkForShellUpdate() {
+  if (!offlineRegistration || state.offline) return;
+  try {
+    await offlineRegistration.update();
+    if (offlineRegistration.waiting) {
+      showAvailableUpdate(offlineRegistration.waiting);
+    }
+  } catch {
+    // The active cache remains usable; reconnecting will trigger another check.
+  }
+}
+
+async function initializeStorageDurability() {
+  const result = await ensureStoragePersistence();
+  state.storageDurability = result.status;
+  const code =
+    {
+      "best-effort": "storage.persistence.best-effort",
+      persistent: "storage.persistence.granted",
+      unknown: "storage.persistence.unknown",
+      unsupported: "storage.persistence.unsupported",
+    }[result.status] || "storage.persistence.unknown";
+  recordDiagnostic({
+    severity: result.status === "unknown" ? "warning" : "info",
+    subsystem: "storage",
+    code,
+    detail: result.detail,
+  });
 }
 
 function recalculateTrace() {
@@ -812,9 +1057,16 @@ function diagnosticStatusLabel(status) {
       error: "Error",
       healthy: "Healthy",
       idle: "Idle",
+      "best-effort": "Best effort",
+      failed: "Failed",
+      persistent: "Persistent",
+      ready: "Ready",
       saved: "Saved",
       saving: "Saving",
+      unavailable: "Unavailable",
       unsaved: "Unsaved changes",
+      unknown: "Unknown",
+      unsupported: "Unsupported",
     }[status] || status
   );
 }
@@ -837,7 +1089,10 @@ function diagnosticsContext() {
     interpreterProfile: INTERPRETER_PROFILE,
     userAgent: globalThis.navigator?.userAgent || "",
     language: globalThis.navigator?.language || "",
-    online: globalThis.navigator?.onLine !== false,
+    online: !state.offline,
+    offlineCache: state.offlineCache,
+    storageDurability: state.storageDurability,
+    shellRevision: state.activeShellRevision,
     ...diagnosticCounts(),
   };
 }
@@ -877,6 +1132,13 @@ function renderDiagnostics() {
   $("diagnosticsStorageState").textContent = diagnosticStatusLabel(
     snapshot.subsystems.storage.status,
   );
+  $("diagnosticsDurabilityState").textContent = diagnosticStatusLabel(
+    state.storageDurability,
+  );
+  $("diagnosticsCacheState").textContent =
+    state.offlineCache === "ready"
+      ? `Ready · ${state.activeShellRevision}`
+      : diagnosticStatusLabel(state.offlineCache);
   $("diagnosticsRetentionState").textContent = diagnosticStatusLabel(
     snapshot.subsystems.retention.status,
   );
@@ -886,6 +1148,7 @@ function renderDiagnostics() {
     ["IndexedDB schema", DATABASE_VERSION],
     ["Diagnostics format", DIAGNOSTICS_FORMAT_VERSION],
     ["Interpreter", INTERPRETER_PROFILE],
+    ["Offline shell", state.activeShellRevision],
   ]
     .map(
       ([label, value]) =>
@@ -1498,6 +1761,53 @@ document.querySelectorAll("[data-view]").forEach((button) => {
   };
 });
 
+$("applyUpdate").onclick = async () => {
+  const worker = offlineRegistration?.waiting || pendingUpdateWorker;
+  if (!worker) {
+    pendingUpdateWorker = null;
+    $("applyUpdate").classList.add("hidden");
+    return;
+  }
+  const saveResult = await queueSave({ immediate: true });
+  if (saveResult.status !== "saved") {
+    setMessage(
+      "Update not applied because the current project could not be saved.",
+      "error",
+    );
+    return;
+  }
+  reloadForUpdate = true;
+  setMessage("Saved · applying update…", "success");
+  worker.postMessage({ type: "BATFLOW_ACTIVATE" });
+  updateActivationTimer = globalThis.setTimeout(() => {
+    reloadForUpdate = false;
+    updateActivationTimer = null;
+    setMessage(
+      "The update could not be activated. Your saved project remains open.",
+      "error",
+    );
+    recordDiagnostic({
+      severity: "warning",
+      subsystem: "cache",
+      code: "cache.update.failed",
+      detail: "No service-worker controller change was observed.",
+    });
+  }, 10000);
+};
+
+renderConnectivity();
+if (state.offline) scheduleConnectivityProbe();
+globalThis.addEventListener("offline", () => setConnectivity(true));
+globalThis.addEventListener("online", () => {
+  setConnectivity(false);
+  void checkForShellUpdate();
+});
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    void checkForShellUpdate();
+  }
+});
+
 globalThis.addEventListener(
   "error",
   (event) => {
@@ -1568,6 +1878,8 @@ recordDiagnostic({
   code: "app.started",
   summary: "BATFlow started.",
 });
+void registerOfflineShell();
+void initializeStorageDurability();
 
 try {
   const loaded = await loadCurrentProject();

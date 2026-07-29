@@ -3,7 +3,7 @@
 BATFlow is a static, client-side visual editor and control-flow simulator for
 Win98 MS-DOS 7.1 batch files.
 
-The current managed development baseline is `0.5.3`. BATFlow was formerly
+The current managed development baseline is `0.5.4`. BATFlow was formerly
 called `passes`. Pre-1.0 development uses structured `0.x` versions without
 formal Git tags or GitHub releases.
 
@@ -25,7 +25,7 @@ Node.js 24 is required. From a clean checkout:
 
 ```sh
 npm ci
-npx playwright install chromium
+npx playwright install chromium firefox webkit
 npm run check
 npm run test:e2e
 npm run package
@@ -39,6 +39,8 @@ under ignored `.agent/test-results/`. `dist/` is also generated and ignored.
 ## Current capabilities
 
 - Browser-local IndexedDB project persistence
+- Reloadable offline editing after one successful online load
+- Best-effort persistent-storage negotiation and visible cache diagnostics
 - Named projects with durable file identities and an explicit entry file
 - Multi-file and relative-folder BAT, CONFIG.SYS, and text import
 - DOS-aware rename, deletion, collision, and path diagnostics
@@ -56,8 +58,8 @@ under ignored `.agent/test-results/`. `dist/` is also generated and ignored.
 The supported text boundary is UTF-8 with CRLF, LF, or CR line endings; BATFlow
 does not guess legacy DOS code pages. Review the
 [compatibility boundary](docs/COMPATIBILITY.md), [project format](docs/PROJECT_FORMAT.md),
-[diagnostics boundary](docs/DIAGNOSTICS.md), [roadmap](docs/ROADMAP.md), and baseline
-[project assessment](docs/PROJECT_ASSESSMENT.md).
+[diagnostics boundary](docs/DIAGNOSTICS.md), [deployment guidance](docs/DEPLOYMENT.md),
+[roadmap](docs/ROADMAP.md), and baseline [project assessment](docs/PROJECT_ASSESSMENT.md).
 
 ## Development policy
 

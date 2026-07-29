@@ -4,6 +4,28 @@ BATFlow uses Semantic Versioning for managed development milestones. Formal Git
 tags and GitHub releases begin at `1.0.0`. The project-format, browser-storage,
 and interpreter-profile versions are managed separately.
 
+## 0.5.4 — browser and offline hardening
+
+### Added
+
+- Required Firefox, Chromium, and WebKit acceptance coverage in the existing
+  CI verification check.
+- A versioned, static-shell service worker for reloadable offline editing after
+  one successful online load.
+- Visible Offline and Update ready states, with successful project persistence
+  required before an update can activate and reload.
+- Automatic one-time persistent-storage negotiation with browser-specific
+  permission behavior and silent best-effort fallback.
+- Cache readiness, shell revision, and storage durability in diagnostics
+  format 2.
+
+### Changed
+
+- HTML navigation now revalidates online instead of relying on a potentially
+  stale browser cache; revisioned shell assets remain coherent offline.
+- Deployment and compatibility documentation now defines HTTPS, cache-header,
+  subpath, eviction, and supported-browser behavior.
+
 ## 0.5.3 — structured diagnostics
 
 ### Added

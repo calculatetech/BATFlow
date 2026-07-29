@@ -10,11 +10,11 @@ const read = (path) => readFileSync(join(root, path), "utf8");
 
 test("the managed product version is consistently declared", () => {
   const manifest = JSON.parse(read("package.json"));
-  assert.equal(manifest.version, "0.5.3");
-  assert.match(read("README.md"), /development baseline is `0\.5\.3`/);
+  assert.equal(manifest.version, "0.5.4");
+  assert.match(read("README.md"), /development baseline is `0\.5\.4`/);
   assert.match(
     read("docs/ROADMAP.md"),
-    /Current baseline: \*\*0\.5\.3 development\*\*/,
+    /Current baseline: \*\*0\.5\.4 development\*\*/,
   );
 });
 
@@ -69,23 +69,52 @@ test("the public UI has no private example loader or in-app roadmap", () => {
 
 test("the public HTML references only present runtime assets", () => {
   const html = read("public/index.html");
-  assert.match(html, /href="styles\.css\?v=0\.5\.3-dev"/);
-  assert.match(html, /src="app\.js\?v=0\.5\.3-dev"/);
+  const revision = "0.5.4-dev.7";
+  const revisionPattern = revision.replaceAll(".", "\\.");
+  assert.match(html, new RegExp(`href="styles\\.css\\?v=${revisionPattern}"`));
+  assert.match(html, new RegExp(`src="app\\.js\\?v=${revisionPattern}"`));
   for (const module of [
     "public/app.js",
     "public/lib/project-format.js",
     "public/lib/simulation.js",
     "public/lib/storage.js",
   ]) {
-    assert.match(read(module), /\.js\?v=0\.5\.3-dev/);
+    assert.match(read(module), new RegExp(`\\.js\\?v=${revisionPattern}`));
   }
-  assert.match(read("public/app.js"), /save-queue\.js\?v=0\.5\.3-dev/);
-  assert.match(read("public/app.js"), /diagnostics\.js\?v=0\.5\.3-dev/);
+  assert.match(
+    read("public/app.js"),
+    new RegExp(`save-queue\\.js\\?v=${revisionPattern}`),
+  );
+  assert.match(
+    read("public/app.js"),
+    new RegExp(`diagnostics\\.js\\?v=${revisionPattern}`),
+  );
+  assert.match(
+    read("public/app.js"),
+    new RegExp(`browser-runtime\\.js\\?v=${revisionPattern}`),
+  );
+  const worker = read("public/service-worker.js");
+  assert.match(worker, new RegExp(`SHELL_REVISION = "${revisionPattern}"`));
+  for (const asset of [
+    "styles.css",
+    "app.js",
+    "lib/batch-core.js",
+    "lib/browser-runtime.js",
+    "lib/diagnostics.js",
+    "lib/project-format.js",
+    "lib/save-queue.js",
+    "lib/simulation.js",
+    "lib/storage.js",
+  ]) {
+    assert.match(worker, new RegExp(`${asset.replace(".", "\\.")}\\?v=`));
+  }
   assert.match(read("public/app.js"), /if \(saveResult\.status === "saved"\)/);
   assert.doesNotThrow(() => read("public/styles.css"));
   assert.doesNotThrow(() => read("public/app.js"));
   assert.doesNotThrow(() => read("public/lib/save-queue.js"));
   assert.doesNotThrow(() => read("public/lib/diagnostics.js"));
+  assert.doesNotThrow(() => read("public/lib/browser-runtime.js"));
+  assert.doesNotThrow(() => read("public/service-worker.js"));
 });
 
 test("the human-facing roadmap records the delivery and result policies", () => {
@@ -120,8 +149,13 @@ test("the human-facing roadmap records the delivery and result policies", () => 
 
 test("pre-1.0 CI validates builds without publishing review artifacts", () => {
   const ci = read(".github/workflows/ci.yml");
+  const playwright = read("playwright.config.js");
   assert.equal(existsSync(join(root, ".github/workflows/release.yml")), false);
   assert.doesNotMatch(ci, /upload-artifact|release candidate/i);
+  assert.match(ci, /playwright install --with-deps chromium firefox webkit/);
+  assert.match(playwright, /name: "chromium"/);
+  assert.match(playwright, /name: "firefox"/);
+  assert.match(playwright, /name: "webkit"/);
   assert.match(ci, /npm run verify:reproducible/);
   assert.match(ci, /BATFLOW_WEB_ROOT=dist/);
 });

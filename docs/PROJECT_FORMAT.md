@@ -1,6 +1,6 @@
 # BATFlow project format
 
-BATFlow 0.5.3 exports UTF-8 JSON files named `*.batflow`. The top-level
+BATFlow 0.5.4 exports UTF-8 JSON files named `*.batflow`. The top-level
 envelope keeps independent version domains:
 
 ```json
@@ -8,7 +8,7 @@ envelope keeps independent version domains:
   "formatVersion": 2,
   "createdBy": {
     "product": "BATFlow",
-    "productVersion": "0.5.3"
+    "productVersion": "0.5.4"
   },
   "interpreterProfile": "msdos-7.1-command.com",
   "project": {}

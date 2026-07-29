@@ -116,15 +116,24 @@
         });
       })();
     </script>
-    <link rel="stylesheet" href="styles.css?v=0.5.3-dev" />
+    <link rel="stylesheet" href="styles.css?v=0.5.4-dev.7" />
   </head>
   <body>
     <header class="topbar">
       <div>
         <h1>BATFlow</h1>
-        <span>Win98 MS-DOS 7.1 visual batch editor · v0.5.3 · development</span>
+        <span
+          >Win98 MS-DOS 7.1 visual batch editor · v0.5.4 · development
+          dev.7</span
+        >
       </div>
       <div class="toolbar">
+        <span id="offlineStatus" class="connectivity-chip hidden" role="status">
+          Offline
+        </span>
+        <button id="applyUpdate" class="update-button hidden" type="button">
+          Update ready
+        </button>
         <button
           id="openDiagnostics"
           class="diagnostics-button healthy"
@@ -341,6 +350,14 @@
             <dd id="diagnosticsStorageState"></dd>
           </div>
           <div>
+            <dt>Storage durability</dt>
+            <dd id="diagnosticsDurabilityState"></dd>
+          </div>
+          <div>
+            <dt>Offline application shell</dt>
+            <dd id="diagnosticsCacheState"></dd>
+          </div>
+          <div>
             <dt>Diagnostic history</dt>
             <dd id="diagnosticsRetentionState"></dd>
           </div>
@@ -359,6 +376,6 @@
       </section>
     </dialog>
 
-    <script type="module" src="app.js?v=0.5.3-dev"></script>
+    <script type="module" src="app.js?v=0.5.4-dev.7"></script>
   </body>
 </html>

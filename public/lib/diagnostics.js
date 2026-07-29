@@ -1,18 +1,23 @@
-export const DIAGNOSTICS_FORMAT_VERSION = 1;
-export const DIAGNOSTICS_SESSION_KEY = "batflow:diagnostics:v1";
+export const DIAGNOSTICS_FORMAT_VERSION = 2;
+export const DIAGNOSTICS_SESSION_KEY = "batflow:diagnostics:v2";
 
 const DEFAULT_MAX_EVENTS = 100;
 const MAX_DETAIL_LENGTH = 4096;
-const SUBSYSTEMS = ["runtime", "storage", "save", "retention"];
+const SUBSYSTEMS = ["runtime", "storage", "save", "cache", "retention"];
 const HEALTH_STATES = ["healthy", "saving", "attention", "error"];
 const SUBSYSTEM_STATES = {
   runtime: ["healthy", "error"],
   storage: ["checking", "healthy", "attention", "error"],
   save: ["idle", "unsaved", "saving", "saved", "error"],
+  cache: ["checking", "healthy", "attention"],
   retention: ["healthy", "attention"],
 };
 const PUBLIC_SUMMARIES = {
   "app.started": "BATFlow started.",
+  "cache.install.failed": "The offline application shell is unavailable.",
+  "cache.install.ready": "The offline application shell is ready.",
+  "cache.update.failed": "An application update could not be activated.",
+  "cache.update.ready": "An application update is ready.",
   "diagnostics.retention.unavailable":
     "Session diagnostic history is unavailable.",
   "project.import.rejected": "A project import was rejected.",
@@ -27,6 +32,12 @@ const PUBLIC_SUMMARIES = {
   "storage.migration.failed": "An upgraded project could not be saved.",
   "storage.migration.succeeded": "Stored project data was upgraded.",
   "storage.recovery.succeeded": "Stored project data required safe recovery.",
+  "storage.persistence.best-effort": "Browser storage remains best effort.",
+  "storage.persistence.granted": "Browser storage is persistent.",
+  "storage.persistence.unknown":
+    "Browser storage durability could not be determined.",
+  "storage.persistence.unsupported":
+    "Persistent browser storage is unsupported.",
   "storage.save.failed": "Project changes could not be saved.",
   "storage.save.recovered": "Project saving recovered.",
 };
@@ -90,6 +101,7 @@ function initialSubsystems() {
     runtime: { status: "healthy", detail: "" },
     storage: { status: "checking", detail: "" },
     save: { status: "idle", detail: "" },
+    cache: { status: "checking", detail: "" },
     retention: { status: "healthy", detail: "" },
   };
 }
@@ -107,6 +119,7 @@ function aggregateHealth(subsystems) {
   }
   if (
     subsystems.retention.status === "attention" ||
+    subsystems.cache.status === "attention" ||
     ["attention", "checking"].includes(subsystems.storage.status)
   ) {
     return "attention";
@@ -295,11 +308,27 @@ export function createDiagnosticsDocument(snapshot, context = {}) {
       projectFormat: context.projectFormatVersion,
       indexedDbSchema: context.databaseVersion,
       interpreterProfile: context.interpreterProfile,
+      offlineShell:
+        typeof context.shellRevision === "string"
+          ? context.shellRevision
+          : null,
     },
     runtime: {
       userAgent: context.userAgent || "",
       language: context.language || "",
       online: context.online !== false,
+      offlineCache: normalizedState(context.offlineCache, [
+        "checking",
+        "ready",
+        "unavailable",
+        "failed",
+      ]),
+      storageDurability: normalizedState(context.storageDurability, [
+        "persistent",
+        "best-effort",
+        "unsupported",
+        "unknown",
+      ]),
     },
     health: {
       overall: normalizedState(snapshot.health, HEALTH_STATES),

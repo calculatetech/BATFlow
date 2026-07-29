@@ -31,12 +31,19 @@ async function downloadJson(page, buttonName) {
   return { content, download, document: JSON.parse(content) };
 }
 
+async function waitForOfflineShell(page) {
+  await expect(page.locator("#diagnosticsCacheState")).toContainText("Ready");
+  await page.waitForFunction(() =>
+    Boolean(globalThis.navigator.serviceWorker?.controller),
+  );
+}
+
 test("starts empty, exposes the managed version, and has no serious axe violations", async ({
   page,
 }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "BATFlow" })).toBeVisible();
-  await expect(page.locator("#statusText")).toContainText("v0.5.3");
+  await expect(page.locator("#statusText")).toContainText("v0.5.4");
   await expect(page.locator("#statusText")).toContainText("development");
   await expect(page.getByText("No file selected.").first()).toBeVisible();
   await expect(page.locator("#diagnosticsBadge")).toHaveText("Healthy");
@@ -47,12 +54,19 @@ test("starts empty, exposes the managed version, and has no serious axe violatio
   await expect(page.locator("#diagnosticsLastSave")).toHaveText(
     "Not observed this session",
   );
-  await expect(page.locator("#diagnosticsVersions")).toContainText("0.5.3");
+  await expect(page.locator("#diagnosticsVersions")).toContainText("0.5.4");
   await expect(page.locator("#diagnosticsVersions")).toContainText(
     "Project format",
   );
   await expect(page.locator("#diagnosticsVersions")).toContainText(
     "msdos-7.1-command.com",
+  );
+  await expect(page.locator("#diagnosticsVersions")).toContainText(
+    "0.5.4-dev.7",
+  );
+  await expect(page.locator("#diagnosticsCacheState")).toContainText("Ready");
+  await expect(page.locator("#diagnosticsDurabilityState")).toHaveText(
+    /Persistent|Best effort|Unsupported|Unknown/,
   );
 
   await page.addScriptTag({ path: axePath });
@@ -66,6 +80,135 @@ test("starts empty, exposes the managed version, and has no serious axe violatio
   });
   expect(violations).toEqual([]);
   await page.getByRole("button", { name: "Close" }).click();
+});
+
+test("reloads and saves the current project offline after the shell is cached", async ({
+  context,
+  page,
+}) => {
+  await page.goto("/");
+  await waitForOfflineShell(page);
+  await importFiles(page, {
+    name: "OFFLINE.BAT",
+    mimeType: "text/plain",
+    buffer: Buffer.from("echo online\r\nexit"),
+  });
+  await expect(page.locator("#appMessage")).toHaveText("Saved");
+
+  await context.addCookies([
+    {
+      name: "batflow-test-offline",
+      value: "1",
+      url: "http://127.0.0.1:41740",
+    },
+  ]);
+  await page.evaluate(() => {
+    globalThis.navigator.serviceWorker.controller.postMessage({
+      type: "BATFLOW_STATUS_REQUEST",
+    });
+  });
+  await expect(page.locator("#offlineStatus")).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("button", { name: "OFFLINE.BAT" })).toBeVisible();
+  await expect(page.locator("#offlineStatus")).toBeVisible();
+  await page.getByRole("tab", { name: "Source" }).click();
+  await page.locator("#sourceView").fill("echo edited offline\r\nexit");
+  await expect(page.locator("#appMessage")).toHaveText("Saved");
+
+  await context.clearCookies();
+  await expect(page.locator("#offlineStatus")).toBeHidden();
+  await page.reload();
+  await page.getByRole("tab", { name: "Source" }).click();
+  await expect(page.locator("#sourceView")).toHaveValue(
+    "echo edited offline\nexit",
+  );
+});
+
+test("the complete offline shell is scope-relative under a deployment subpath", async ({
+  page,
+}) => {
+  await page.goto("/batflow/");
+  await waitForOfflineShell(page);
+  await expect(page.getByRole("heading", { name: "BATFlow" })).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => globalThis.navigator.serviceWorker.controller.scriptURL,
+    ),
+  ).toContain("/batflow/service-worker.js");
+});
+
+test("an available update reloads only after the current project saves", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const activated = sessionStorage.getItem("batflow:test-update") === "1";
+    const container = new EventTarget();
+    const worker = new EventTarget();
+    worker.state = "installed";
+    worker.postMessage = (message) => {
+      if (message.type === "BATFLOW_ACTIVATE") {
+        globalThis.__batflowActivationCount += 1;
+        sessionStorage.setItem("batflow:test-update", "1");
+        registration.waiting = null;
+        globalThis.setTimeout(
+          () => container.dispatchEvent(new Event("controllerchange")),
+          0,
+        );
+      }
+    };
+    const active = {
+      postMessage() {},
+    };
+    const registration = new EventTarget();
+    registration.active = active;
+    registration.installing = null;
+    registration.waiting = activated ? null : worker;
+    registration.update = async () => {};
+    container.controller = active;
+    container.ready = Promise.resolve(registration);
+    container.register = async () => registration;
+    globalThis.__batflowActivationCount = 0;
+    Object.defineProperty(globalThis.navigator, "serviceWorker", {
+      configurable: true,
+      value: container,
+    });
+  });
+
+  await page.goto("/");
+  await expect(
+    page.getByRole("button", { name: "Update ready" }),
+  ).toBeVisible();
+  await importFiles(page, {
+    name: "UPDATE.BAT",
+    mimeType: "text/plain",
+    buffer: Buffer.from("echo retained\r\nexit"),
+  });
+  await expect(page.locator("#appMessage")).toHaveText("Saved");
+
+  await page.evaluate(() => {
+    globalThis.__batflowOriginalPut = globalThis.IDBObjectStore.prototype.put;
+    globalThis.IDBObjectStore.prototype.put = function failUpdateSave() {
+      throw new DOMException("Forced update save failure", "UnknownError");
+    };
+  });
+  await page.getByRole("button", { name: "Update ready" }).click();
+  await expect(page.locator("#appMessage")).toContainText("Update not applied");
+  await expect(
+    page.getByRole("button", { name: "Update ready" }),
+  ).toBeVisible();
+  expect(await page.evaluate(() => globalThis.__batflowActivationCount)).toBe(
+    0,
+  );
+
+  await page.evaluate(() => {
+    globalThis.IDBObjectStore.prototype.put = globalThis.__batflowOriginalPut;
+  });
+  await Promise.all([
+    page.waitForEvent("load"),
+    page.getByRole("button", { name: "Update ready" }).click(),
+  ]);
+  await expect(page.getByRole("button", { name: "UPDATE.BAT" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Update ready" })).toBeHidden();
 });
 
 for (const asset of ["app.js", "lib/diagnostics.js"]) {
@@ -92,6 +235,7 @@ for (const asset of ["app.js", "lib/diagnostics.js"]) {
 }
 
 test("fallback diagnostics preserve early runtime error codes and details", async ({
+  browserName,
   page,
 }) => {
   await page.addInitScript(() => {
@@ -107,7 +251,7 @@ test("fallback diagnostics preserve early runtime error codes and details", asyn
     "runtime.error",
   );
   await expect(page.locator("#diagnosticsEvents")).toContainText(
-    "EARLY-RUNTIME-DETAIL",
+    browserName === "webkit" ? "Script error." : "EARLY-RUNTIME-DETAIL",
   );
 });
 
@@ -423,7 +567,7 @@ test("exports a versioned project and rejects invalid import without replacement
   for await (const chunk of stream) content += chunk.toString();
   const document = JSON.parse(content);
   expect(document.formatVersion).toBe(2);
-  expect(document.createdBy.productVersion).toBe("0.5.3");
+  expect(document.createdBy.productVersion).toBe("0.5.4");
 
   await page.locator("#fileInput").setInputFiles({
     name: "broken.batflow",
@@ -523,13 +667,18 @@ test("diagnostics track saves across reload and export only redacted context", a
   expect(exported.download.suggestedFilename()).toMatch(
     /^batflow-diagnostics-\d{8}-\d{6}Z\.json$/,
   );
-  expect(exported.document.diagnosticsFormatVersion).toBe(1);
-  expect(exported.document.createdBy.productVersion).toBe("0.5.3");
+  expect(exported.document.diagnosticsFormatVersion).toBe(2);
+  expect(exported.document.createdBy.productVersion).toBe("0.5.4");
   expect(exported.document.versionDomains).toEqual({
     projectFormat: 2,
     indexedDbSchema: 1,
     interpreterProfile: "msdos-7.1-command.com",
+    offlineShell: "0.5.4-dev.7",
   });
+  expect(exported.document.runtime.offlineCache).toBe("ready");
+  expect(["persistent", "best-effort", "unsupported", "unknown"]).toContain(
+    exported.document.runtime.storageDurability,
+  );
   expect(exported.document.counts.files).toBe(1);
   for (const secret of [
     "SECRET PROJECT",

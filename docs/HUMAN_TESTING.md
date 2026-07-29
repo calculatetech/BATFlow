@@ -5,6 +5,10 @@ implementation worktree before it is committed. A commit is authorized only
 after the project owner approves that working tree. If behavior changes
 afterward, human verification must be repeated before another commit.
 
+Firefox is the required browser for human verification. Chromium and WebKit
+are required automated CI engines; CI artifacts are never the human test
+target.
+
 After approval, commit and push the exact reviewed tree. Required CI then
 confirms that the committed source reproduces the automated checks and
 deployment bundle. Before merge, inspect all pull-request comments and review
@@ -64,9 +68,9 @@ probe output belong under ignored `.agent/test-results/`, not in commits.
   compare source, notes, file list, and line endings.
 - Confirm an invalid or future-version project reports an error without
   replacing current work.
-- Open Diagnostics and confirm it reports product 0.5.3, project format 2,
-  IndexedDB schema 1, diagnostics format 1, and the current interpreter
-  profile.
+- Open Diagnostics and confirm it reports product 0.5.4, shell revision
+  0.5.4-dev.7, project format 2, IndexedDB schema 1, diagnostics format 2, and
+  the current interpreter profile.
 - Edit source and confirm Diagnostics transitions through Saving to Healthy,
   records the successful-save time, and retains session events after reload.
 - Force or otherwise observe a save/storage failure and confirm the health
@@ -76,6 +80,21 @@ probe output belong under ignored `.agent/test-results/`, not in commits.
 - Export diagnostics and confirm it contains operational codes, versions, and
   counts but no project name, filenames, source, notes, or simulation values.
   Clear history and confirm an active failure remains visible.
+- On the first Firefox load for an origin, respond to any browser-native
+  persistent-storage prompt. Reload and confirm it is not requested again.
+  Confirm Diagnostics reports Persistent or Best effort without treating
+  denial as an application error.
+- Wait for Diagnostics to report the offline application shell Ready. Put
+  Firefox offline without clearing browser data, reload, and confirm the full
+  editor and saved project open normally with only the compact Offline chip.
+  Edit and save while offline, reconnect, reload, and confirm the edit remains.
+- Load the previous candidate at a local origin, then serve the new candidate
+  from the same origin. Confirm Update ready appears without an automatic
+  reload. Activate it and confirm the project first reaches Saved, the page
+  reloads once, and the new shell revision is reported. A forced save failure
+  must leave the old page open and the action available.
+- Refresh online without clearing browser data and confirm current HTML and
+  the managed shell revision load without stale or mixed runtime assets.
 - Navigate file items, tabs, labels, blocks, validation findings, and inspector
   controls using only the keyboard at desktop and narrow viewport widths.
 - Confirm the repository, `.git`, `.agent`, `docs`, tests, private fixtures, and

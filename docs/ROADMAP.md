@@ -2,7 +2,7 @@
 
 Last updated: July 28, 2026
 
-Current baseline: **0.5.3 development**
+Current baseline: **0.5.4 development**
 
 BATFlow, formerly called `passes`, is being converted from an unversioned
 prototype into a managed and genuinely usable application. The detailed audit
@@ -93,9 +93,22 @@ that BATFlow is stable, complete, or ready for formal release.
 - Added a privacy-safe diagnostics export that contains operational metadata
   and counts without project content or identifiers.
 
+## Completed: 0.5.4 browser and offline hardening
+
+- Added required Firefox, Chromium, and WebKit browser acceptance in the
+  existing `verify` CI check, with Firefox retained as the human-verification
+  baseline.
+- Added a versioned offline application shell that reloads after one successful
+  online load, never caches project content, and never reloads an open editor
+  automatically.
+- Added explicit update readiness, save-before-update activation, connectivity
+  status, one-time persistent-storage negotiation, and cache/durability
+  diagnostics.
+- Documented secure static deployment, cache headers, browser-owned storage,
+  eviction limits, and root or subpath hosting.
+
 ## Priority 1: 0.5.x usability hardening
 
-- Broader browser compatibility, cache behavior, and offline behavior.
 - Terminal-newline presentation cleanup and additional keyboard ergonomics.
 
 Compatible fixes and hardening advance the patch version. The exact target is

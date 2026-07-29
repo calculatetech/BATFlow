@@ -26,8 +26,10 @@ const entries = execFileSync("unzip", ["-Z1", archivePath], {
   .split("\n");
 assert.ok(entries.includes("index.html"));
 assert.ok(entries.includes("app.js"));
+assert.ok(entries.includes("service-worker.js"));
 assert.ok(entries.includes("styles.css"));
 assert.ok(entries.includes("lib/batch-core.js"));
+assert.ok(entries.includes("lib/browser-runtime.js"));
 assert.ok(entries.includes("lib/diagnostics.js"));
 for (const entry of entries) {
   assert.doesNotMatch(entry, /(?:^|\/)(?:\.git|\.agent|docs|tests)(?:\/|$)/);

@@ -63,6 +63,7 @@ findings have these dispositions:
 | RM-05, OP-03 | Closed for development by runtime-only deterministic packaging, checksums, and staged-root smoke checks. Formal publishing automation is deferred until `1.0.0`. |
 | RM-09, DOC-01, DOC-02 | Closed by the priority roadmap, corrected deployment/development instructions, and reconciled release documentation. |
 | OP-01, OP-02 | Closed by serving only the runtime root and removing the broken in-application roadmap. |
+| OP-04 | Closed in 0.5.4 by a documented Firefox/Chromium/WebKit test matrix, coherent shell revisioning, network-revalidated navigation, offline fallback, and explicit save-before-update activation. |
 | DI-01 through DI-05 | Closed for the documented 0.5.0 boundary by confirmation gates, durable identities, explicit UTF-8/line-ending handling, a validated versioned format, and transaction-aware stable storage. |
 | DI-06 | Closed in 0.5.1 by a validated, project-scoped active scenario that persists through browser storage and `.batflow` export/import. |
 | DI-08 | Closed in 0.5.2 by editable project names, durable file IDs, entry designation, relative-folder import, and explicit DOS-insensitive collision handling. |

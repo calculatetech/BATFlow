@@ -129,6 +129,23 @@ test("malformed session history is rejected without breaking diagnostics", () =>
   assert.equal(snapshot.events[0].code, "diagnostics.retention.unavailable");
 });
 
+test("format-1 session diagnostics are ignored instead of migrated", () => {
+  const storage = memoryStorage();
+  storage.values.set(
+    "batflow:diagnostics:v1",
+    JSON.stringify({
+      formatVersion: 1,
+      events: [{ code: "runtime.error", detail: "OLD-PRIVATE-DETAIL" }],
+    }),
+  );
+  const snapshot = createDiagnosticsStore({
+    storage,
+    clock: fixedClock(),
+  }).getSnapshot();
+  assert.deepEqual(snapshot.events, []);
+  assert.equal(snapshot.subsystems.retention.status, "healthy");
+});
+
 test("retained diagnostics are normalized before display and export", () => {
   const storage = memoryStorage();
   const secret = "PRIVATE-RETAINED-VALUE";
@@ -188,7 +205,7 @@ test("retained diagnostics are normalized before display and export", () => {
   snapshot.subsystems.runtime.status = secret;
   const document = createDiagnosticsDocument(snapshot, {
     createdAt: "2026-07-28T12:30:00.000Z",
-    productVersion: "0.5.3",
+    productVersion: "0.5.4",
   });
   const exported = JSON.stringify(document);
   assert.equal(document.health.overall, "unknown");
@@ -212,19 +229,25 @@ test("diagnostics export contains safe structure and excludes raw project data",
   });
   const document = createDiagnosticsDocument(store.getSnapshot(), {
     createdAt: "2026-07-28T12:30:00.000Z",
-    productVersion: "0.5.3",
+    productVersion: "0.5.4",
     projectFormatVersion: 2,
     databaseVersion: 1,
     interpreterProfile: "msdos-7.1-command.com",
     userAgent: "Synthetic browser",
     language: "en-US",
     online: true,
+    offlineCache: "ready",
+    storageDurability: "best-effort",
+    shellRevision: "0.5.4-dev.7",
     fileCount: 4,
     validationCount: 2,
   });
   const exported = JSON.stringify(document);
 
   assert.equal(document.diagnosticsFormatVersion, DIAGNOSTICS_FORMAT_VERSION);
+  assert.equal(document.versionDomains.offlineShell, "0.5.4-dev.7");
+  assert.equal(document.runtime.offlineCache, "ready");
+  assert.equal(document.runtime.storageDurability, "best-effort");
   assert.deepEqual(document.counts, {
     files: 4,
     validations: 2,

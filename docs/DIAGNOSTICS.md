@@ -1,9 +1,10 @@
 # BATFlow diagnostics
 
-BATFlow 0.5.3 exposes local operational diagnostics without sending project
+BATFlow 0.5.4 exposes local operational diagnostics without sending project
 data anywhere. The header badge summarizes active runtime, browser-storage,
-save, and diagnostic-history health. Its dialog provides local technical
-details and the last successful save observed during the current tab session.
+save, offline-cache, and diagnostic-history health. Its dialog provides local
+technical details and the last successful save observed during the current tab
+session.
 
 ## Retention and health
 
@@ -21,13 +22,14 @@ Local event details may contain browser error messages or project context
 needed to diagnose a failure. They remain in the browser session and are never
 included in the diagnostics export.
 
-## Export format 1
+## Export format 2
 
 `batflow-diagnostics-*.json` contains:
 
-- product, project-format, IndexedDB-schema, diagnostics-format, and
-  interpreter-profile versions;
-- browser user agent, language, and online state;
+- product, project-format, IndexedDB-schema, diagnostics-format,
+  interpreter-profile, and offline-shell versions;
+- browser user agent, language, online state, offline-cache state, and storage
+  durability;
 - active subsystem states and the last observed successful-save time;
 - file, current-validation, and event counts;
 - event timestamps, severity, subsystem, stable code, and fixed safe summary.
@@ -39,3 +41,7 @@ upload or remote telemetry.
 
 Diagnostics format versioning is independent from the BATFlow product,
 `.batflow` project, IndexedDB schema, and interpreter-profile versions.
+
+Format 2 uses the session key `batflow:diagnostics:v2`. Older format-1 session
+history is intentionally not migrated because it is bounded, tab-local
+operational history rather than project data.
