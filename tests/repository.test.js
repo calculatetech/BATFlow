@@ -94,9 +94,10 @@ test("the human-facing roadmap records the delivery and result policies", () => 
     roadmap,
     /All work is performed in a branch or dedicated worktree/,
   );
+  assert.match(roadmap, /reaches\s+`main` only after required CI succeeds/);
   assert.match(
     roadmap,
-    /reaches\s+`main` only after required CI succeeds and the pull request is merged/,
+    /pull-request comments and review\s+threads are inspected, actionable feedback is addressed, and every thread is\s+resolved/,
   );
   assert.match(roadmap, /\.agent\/test-results\//);
   assert.match(
@@ -106,6 +107,10 @@ test("the human-facing roadmap records the delivery and result policies", () => 
   assert.match(
     read("docs/HUMAN_TESTING.md"),
     /Simple documentation and progress-only updates are exempt/,
+  );
+  assert.match(
+    read("docs/HUMAN_TESTING.md"),
+    /all pull-request comments and review\s+threads are addressed and resolved/,
   );
   assert.match(
     roadmap,

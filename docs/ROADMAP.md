@@ -25,7 +25,9 @@ is the human-facing record of completed foundations and remaining priorities.
 - The project owner verifies the uncommitted working tree before it is
   committed.
 - After approval, the exact reviewed tree is committed and pushed. It reaches
-  `main` only after required CI succeeds and the pull request is merged.
+  `main` only after required CI succeeds, all pull-request comments and review
+  threads are inspected, actionable feedback is addressed, and every thread is
+  resolved.
 - CI-generated bundles validate packaging and reproducibility; they are not
   substitutes for human testing.
 - Code changes and major rework receive challenged adversarial review before
