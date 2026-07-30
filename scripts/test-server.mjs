@@ -6,6 +6,7 @@ import process from "node:process";
 const port = Number(process.env.BATFLOW_TEST_SERVER_PORT || 41740);
 const root = path.resolve(process.cwd(), "public");
 const offlineCookie = "batflow-test-offline=1";
+const newEntryCookie = "batflow-test-new-entry=1";
 const contentTypes = {
   ".css": "text/css; charset=utf-8",
   ".html": "text/html; charset=utf-8",
@@ -41,6 +42,21 @@ const server = createServer(async (request, response) => {
   }
   try {
     if (!(await stat(filename)).isFile()) throw new Error("Not a file");
+    if (
+      path.basename(filename) === "index.html" &&
+      request.headers.cookie?.includes(newEntryCookie)
+    ) {
+      const content = Buffer.from(
+        "<!doctype html><title>Unactivated</title><body>UNACTIVATED TEST ENTRYPOINT</body>",
+      );
+      response.writeHead(200, {
+        "Cache-Control": "no-store",
+        "Content-Length": content.length,
+        "Content-Type": contentTypes[".html"],
+      });
+      response.end(request.method === "HEAD" ? undefined : content);
+      return;
+    }
     const content = await readFile(filename);
     response.writeHead(200, {
       "Cache-Control": "no-store",

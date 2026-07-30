@@ -69,7 +69,7 @@ test("the public UI has no private example loader or in-app roadmap", () => {
 
 test("the public HTML references only present runtime assets", () => {
   const html = read("public/index.html");
-  const revision = "0.5.4-dev.7";
+  const revision = "0.5.4-dev.17";
   const revisionPattern = revision.replaceAll(".", "\\.");
   assert.match(html, new RegExp(`href="styles\\.css\\?v=${revisionPattern}"`));
   assert.match(html, new RegExp(`src="app\\.js\\?v=${revisionPattern}"`));
@@ -92,6 +92,14 @@ test("the public HTML references only present runtime assets", () => {
   assert.match(
     read("public/app.js"),
     new RegExp(`browser-runtime\\.js\\?v=${revisionPattern}`),
+  );
+  assert.match(
+    read("public/app.js"),
+    /serviceWorker\.register\(\s*"\.\/service-worker\.js"/,
+  );
+  assert.doesNotMatch(
+    read("public/app.js"),
+    /serviceWorker\.register\(\s*[`'"]\.\/service-worker\.js\?v=/,
   );
   const worker = read("public/service-worker.js");
   assert.match(worker, new RegExp(`SHELL_REVISION = "${revisionPattern}"`));

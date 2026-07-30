@@ -1,7 +1,9 @@
-const SHELL_REVISION = "0.5.4-dev.7";
-const CACHE_PREFIX = "batflow-shell-";
-const CACHE_NAME = `${CACHE_PREFIX}${SHELL_REVISION}`;
+const SHELL_REVISION = "0.5.4-dev.17";
 const SCOPE_URL = new URL("./", globalThis.location.href);
+const CACHE_PREFIX = `batflow-shell-scope:${encodeURIComponent(
+  SCOPE_URL.pathname,
+)}:revision:`;
+const CACHE_NAME = `${CACHE_PREFIX}${SHELL_REVISION}`;
 const INDEX_URL = new URL("index.html", SCOPE_URL).href;
 const SHELL_URLS = [
   "./",
@@ -64,17 +66,10 @@ globalThis.addEventListener("fetch", (event) => {
   if (request.mode === "navigate") {
     event.respondWith(
       (async () => {
-        try {
-          const response = await fetch(
-            new Request(request, { cache: "no-store" }),
-          );
-          if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          return response;
-        } catch {
-          const cache = await caches.open(CACHE_NAME);
-          const cached = await cache.match(INDEX_URL);
-          return cached || Response.error();
-        }
+        const cache = await caches.open(CACHE_NAME);
+        const cached = await cache.match(INDEX_URL);
+        if (cached) return cached;
+        return Response.error();
       })(),
     );
     return;
@@ -83,8 +78,10 @@ globalThis.addEventListener("fetch", (event) => {
   if (VERSIONED_SHELL_URLS.has(url.href)) {
     event.respondWith(
       caches
-        .match(request)
-        .then((cached) => cached || fetch(request, { cache: "no-store" })),
+        .open(CACHE_NAME)
+        .then((cache) =>
+          cache.match(request).then((cached) => cached || Response.error()),
+        ),
     );
   }
 });
@@ -111,6 +108,7 @@ globalThis.addEventListener("message", (event) => {
         }
         source?.postMessage({
           type: "BATFLOW_STATUS",
+          requestId: event.data.requestId,
           cacheReady: true,
           offline,
           shellRevision: SHELL_REVISION,

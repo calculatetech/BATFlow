@@ -3,7 +3,7 @@ import {
   norm,
   parseBatch,
   resolveBatchTarget,
-} from "./lib/batch-core.js?v=0.5.4-dev.7";
+} from "./lib/batch-core.js?v=0.5.4-dev.17";
 import {
   INTERPRETER_PROFILE,
   PROJECT_FORMAT_VERSION,
@@ -26,29 +26,33 @@ import {
   updateFileContent,
   updateProjectName,
   updateProjectSimulationScenario,
-} from "./lib/project-format.js?v=0.5.4-dev.7";
+} from "./lib/project-format.js?v=0.5.4-dev.17";
 import {
   DATABASE_VERSION,
   loadCurrentProject,
   saveCurrentProject,
-} from "./lib/storage.js?v=0.5.4-dev.7";
-import { createSaveQueue } from "./lib/save-queue.js?v=0.5.4-dev.7";
+} from "./lib/storage.js?v=0.5.4-dev.17";
+import { createSaveQueue } from "./lib/save-queue.js?v=0.5.4-dev.17";
 import {
   DIAGNOSTICS_FORMAT_VERSION,
   createDiagnosticsDocument,
   createDiagnosticsStore,
-} from "./lib/diagnostics.js?v=0.5.4-dev.7";
+} from "./lib/diagnostics.js?v=0.5.4-dev.17";
 import {
   collectOutcomeRequests,
   simulate,
-} from "./lib/simulation.js?v=0.5.4-dev.7";
+} from "./lib/simulation.js?v=0.5.4-dev.17";
 import {
   SHELL_REVISION,
   ensureStoragePersistence,
-} from "./lib/browser-runtime.js?v=0.5.4-dev.7";
+} from "./lib/browser-runtime.js?v=0.5.4-dev.17";
 
 const $ = (id) => document.getElementById(id);
 const CONNECTIVITY_SESSION_KEY = "batflow:connectivity:offline:v1";
+const OFFLINE_REGISTRATION_OPTIONS = {
+  scope: "./",
+  updateViaCache: "none",
+};
 
 function retainedOfflineState() {
   try {
@@ -82,6 +86,16 @@ let reloadForUpdate = false;
 let updateActivationTimer = null;
 let pendingUpdateWorker = null;
 let connectivityProbeTimer = null;
+let observedActiveWorker = null;
+let observedActiveRevision = null;
+let observedWaitingWorker = null;
+let observedWaitingRevision = null;
+let updateObservationCounter = 0;
+let updateObservationToken = null;
+let approvedUpdateRevision = null;
+let workerStatusRequestCounter = 0;
+let activeStatusRequestCounter = 0;
+let activeStatusRequestId = null;
 
 function escapeHtml(value) {
   return String(value ?? "").replace(
@@ -254,9 +268,7 @@ function scheduleConnectivityProbe() {
         },
       );
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      state.offline = false;
-      renderConnectivity();
-      renderDiagnostics();
+      setConnectivity(false);
       void checkForShellUpdate();
     } catch {
       scheduleConnectivityProbe();
@@ -265,6 +277,7 @@ function scheduleConnectivityProbe() {
 }
 
 function setConnectivity(offline) {
+  activeStatusRequestId = null;
   state.offline = Boolean(offline);
   try {
     if (state.offline) {
@@ -305,12 +318,61 @@ function showAvailableUpdate(worker) {
   });
 }
 
+function reconcileDuplicateWaitingWorker() {
+  if (
+    !observedActiveWorker ||
+    !observedWaitingWorker ||
+    typeof observedActiveRevision !== "string" ||
+    typeof observedWaitingRevision !== "string" ||
+    observedActiveRevision !== observedWaitingRevision
+  ) {
+    return;
+  }
+  const worker = observedWaitingWorker;
+  observedWaitingWorker = null;
+  observedWaitingRevision = null;
+  updateObservationToken = null;
+  pendingUpdateWorker = null;
+  $("applyUpdate").classList.add("hidden");
+  worker.postMessage({ type: "BATFLOW_ACTIVATE" });
+}
+
+function observeAvailableUpdate(worker) {
+  if (!worker) return;
+  showAvailableUpdate(worker);
+  const active =
+    globalThis.navigator.serviceWorker.controller ||
+    offlineRegistration?.active;
+  const activeChanged = observedActiveWorker !== active;
+  const waitingChanged = observedWaitingWorker !== worker;
+  if (activeChanged) {
+    observedActiveWorker = active;
+    observedActiveRevision = null;
+  }
+  if (waitingChanged) {
+    observedWaitingWorker = worker;
+    observedWaitingRevision = null;
+  }
+  if (activeChanged || waitingChanged || updateObservationToken === null) {
+    updateObservationCounter += 1;
+    updateObservationToken = `update-${updateObservationCounter}`;
+  }
+  active?.postMessage({
+    type: "BATFLOW_STATUS_REQUEST",
+    requestId: `${updateObservationToken}:active`,
+  });
+  worker.postMessage({
+    type: "BATFLOW_STATUS_REQUEST",
+    requestId: `${updateObservationToken}:waiting`,
+  });
+}
+
 function watchInstallingWorker(worker) {
   if (!worker) return;
   worker.addEventListener("statechange", () => {
     if (worker.state === "installed") {
       if (globalThis.navigator.serviceWorker.controller) {
-        showAvailableUpdate(offlineRegistration?.waiting || worker);
+        observeAvailableUpdate(offlineRegistration?.waiting || worker);
       }
       return;
     }
@@ -337,11 +399,150 @@ function watchInstallingWorker(worker) {
   });
 }
 
+function usesStableWorkerUrl(worker) {
+  if (!worker?.scriptURL) return false;
+  try {
+    return new URL(worker.scriptURL).search === "";
+  } catch {
+    return false;
+  }
+}
+
+function waitForStableWaitingWorker(registration) {
+  const waiting = usesStableWorkerUrl(registration.waiting)
+    ? registration.waiting
+    : null;
+  if (waiting) return Promise.resolve(waiting);
+  const installing = registration.installing;
+  if (!installing || !usesStableWorkerUrl(installing)) {
+    return Promise.resolve(null);
+  }
+  if (installing.state === "installed") return Promise.resolve(installing);
+
+  return new Promise((resolve, reject) => {
+    const timeout = globalThis.setTimeout(() => {
+      installing.removeEventListener("statechange", handleStateChange);
+      reject(new Error("Stable service-worker installation timed out."));
+    }, 9000);
+    const finish = (value, error) => {
+      globalThis.clearTimeout(timeout);
+      installing.removeEventListener("statechange", handleStateChange);
+      if (error) {
+        reject(error);
+      } else {
+        resolve(value);
+      }
+    };
+    const handleStateChange = () => {
+      if (installing.state === "installed") {
+        finish(
+          usesStableWorkerUrl(registration.waiting)
+            ? registration.waiting
+            : installing,
+        );
+      } else if (installing.state === "redundant") {
+        finish(null, new Error("Stable service-worker installation failed."));
+      }
+    };
+    installing.addEventListener("statechange", handleStateChange);
+  });
+}
+
+function requestWorkerRevision(worker) {
+  workerStatusRequestCounter += 1;
+  const requestId = `revision-${workerStatusRequestCounter}`;
+  return new Promise((resolve, reject) => {
+    const timeout = globalThis.setTimeout(() => {
+      globalThis.navigator.serviceWorker.removeEventListener(
+        "message",
+        handleMessage,
+      );
+      reject(new Error("Service-worker revision check timed out."));
+    }, 9000);
+    const handleMessage = (event) => {
+      if (
+        event.data?.type !== "BATFLOW_STATUS" ||
+        event.source !== worker ||
+        (event.data.requestId !== requestId && event.data.requestId != null)
+      ) {
+        return;
+      }
+      globalThis.clearTimeout(timeout);
+      globalThis.navigator.serviceWorker.removeEventListener(
+        "message",
+        handleMessage,
+      );
+      if (typeof event.data.shellRevision !== "string") {
+        reject(new Error("Service-worker revision is unavailable."));
+        return;
+      }
+      resolve(event.data.shellRevision);
+    };
+    globalThis.navigator.serviceWorker.addEventListener(
+      "message",
+      handleMessage,
+    );
+    worker.postMessage({ type: "BATFLOW_STATUS_REQUEST", requestId });
+  });
+}
+
+async function activateStableWorkerBeforeReload(expectedRevision) {
+  const controller = globalThis.navigator.serviceWorker.controller;
+  if (!controller || usesStableWorkerUrl(controller)) return false;
+  if (typeof expectedRevision !== "string") {
+    throw new Error("The approved service-worker revision is unavailable.");
+  }
+
+  const registration = await globalThis.navigator.serviceWorker.register(
+    "./service-worker.js",
+    OFFLINE_REGISTRATION_OPTIONS,
+  );
+  offlineRegistration = registration;
+  const stableWorker = await waitForStableWaitingWorker(registration);
+  if (!stableWorker) {
+    throw new Error("The stable service-worker registration is unavailable.");
+  }
+  const stableRevision = await requestWorkerRevision(stableWorker);
+  if (stableRevision !== expectedRevision) {
+    throw new Error(
+      `Stable service-worker revision ${stableRevision} does not match approved revision ${expectedRevision}.`,
+    );
+  }
+  pendingUpdateWorker = stableWorker;
+  stableWorker.postMessage({ type: "BATFLOW_ACTIVATE" });
+  return true;
+}
+
+function reportUpdateActivationFailure() {
+  reloadForUpdate = false;
+  approvedUpdateRevision = null;
+  updateActivationTimer = null;
+  setMessage(
+    "The update could not be activated. Your saved project remains open.",
+    "error",
+  );
+  recordDiagnostic({
+    severity: "warning",
+    subsystem: "cache",
+    code: "cache.update.failed",
+    detail: "No service-worker controller change was observed.",
+  });
+}
+
 function requestWorkerStatus() {
   const worker =
     globalThis.navigator.serviceWorker.controller ||
     offlineRegistration?.active;
-  worker?.postMessage({ type: "BATFLOW_STATUS_REQUEST" });
+  if (!worker) {
+    activeStatusRequestId = null;
+    return;
+  }
+  activeStatusRequestCounter += 1;
+  activeStatusRequestId = `status-${activeStatusRequestCounter}`;
+  worker.postMessage({
+    type: "BATFLOW_STATUS_REQUEST",
+    requestId: activeStatusRequestId,
+  });
 }
 
 async function registerOfflineShell() {
@@ -361,6 +562,41 @@ async function registerOfflineShell() {
 
   globalThis.navigator.serviceWorker.addEventListener("message", (event) => {
     if (event.data?.type !== "BATFLOW_STATUS") return;
+    const requestId =
+      typeof event.data.requestId === "string" ? event.data.requestId : null;
+    const fromWaiting =
+      event.source === observedWaitingWorker &&
+      (requestId === `${updateObservationToken}:waiting` || requestId === null);
+    if (fromWaiting) {
+      observedWaitingRevision =
+        typeof event.data.shellRevision === "string"
+          ? event.data.shellRevision
+          : null;
+      reconcileDuplicateWaitingWorker();
+      return;
+    }
+    const fromObservedActive =
+      event.source === observedActiveWorker &&
+      (requestId === `${updateObservationToken}:active` || requestId === null);
+    if (fromObservedActive) {
+      observedActiveRevision =
+        typeof event.data.shellRevision === "string"
+          ? event.data.shellRevision
+          : null;
+      reconcileDuplicateWaitingWorker();
+      if (requestId !== null) return;
+    }
+    const activeWorker =
+      globalThis.navigator.serviceWorker.controller ||
+      offlineRegistration?.active;
+    if (
+      event.source !== activeWorker ||
+      activeStatusRequestId === null ||
+      (requestId !== null && requestId !== activeStatusRequestId)
+    ) {
+      return;
+    }
+    activeStatusRequestId = null;
     if (event.data.offline === true || !state.offline) {
       setConnectivity(event.data.offline);
     }
@@ -376,14 +612,48 @@ async function registerOfflineShell() {
     "controllerchange",
     () => {
       pendingUpdateWorker = null;
+      observedActiveWorker =
+        globalThis.navigator.serviceWorker.controller ||
+        offlineRegistration?.active;
+      observedActiveRevision = null;
+      observedWaitingWorker = null;
+      observedWaitingRevision = null;
+      updateObservationToken = null;
       $("applyUpdate").classList.add("hidden");
       if (reloadForUpdate) {
-        reloadForUpdate = false;
         if (updateActivationTimer !== null) {
           globalThis.clearTimeout(updateActivationTimer);
           updateActivationTimer = null;
         }
-        globalThis.location.reload();
+        void (async () => {
+          try {
+            if (
+              await activateStableWorkerBeforeReload(approvedUpdateRevision)
+            ) {
+              updateActivationTimer = globalThis.setTimeout(
+                reportUpdateActivationFailure,
+                10000,
+              );
+              return;
+            }
+            reloadForUpdate = false;
+            approvedUpdateRevision = null;
+            globalThis.location.reload();
+          } catch (error) {
+            reloadForUpdate = false;
+            approvedUpdateRevision = null;
+            setMessage(
+              "The update was saved, but its stable browser registration could not be completed.",
+              "error",
+            );
+            recordDiagnostic({
+              severity: "warning",
+              subsystem: "cache",
+              code: "cache.update.failed",
+              detail: errorDetail(error),
+            });
+          }
+        })();
         return;
       }
       requestWorkerStatus();
@@ -392,11 +662,8 @@ async function registerOfflineShell() {
 
   try {
     offlineRegistration = await globalThis.navigator.serviceWorker.register(
-      `./service-worker.js?v=${SHELL_REVISION}`,
-      {
-        scope: "./",
-        updateViaCache: "none",
-      },
+      "./service-worker.js",
+      OFFLINE_REGISTRATION_OPTIONS,
     );
     offlineRegistration.addEventListener("updatefound", () =>
       watchInstallingWorker(offlineRegistration.installing),
@@ -406,7 +673,7 @@ async function registerOfflineShell() {
       offlineRegistration.waiting &&
       globalThis.navigator.serviceWorker.controller
     ) {
-      showAvailableUpdate(offlineRegistration.waiting);
+      observeAvailableUpdate(offlineRegistration.waiting);
     }
     const ready = await globalThis.navigator.serviceWorker.ready;
     offlineRegistration = ready;
@@ -434,7 +701,7 @@ async function checkForShellUpdate() {
   try {
     await offlineRegistration.update();
     if (offlineRegistration.waiting) {
-      showAvailableUpdate(offlineRegistration.waiting);
+      observeAvailableUpdate(offlineRegistration.waiting);
     }
   } catch {
     // The active cache remains usable; reconnecting will trigger another check.
@@ -1776,23 +2043,52 @@ $("applyUpdate").onclick = async () => {
     );
     return;
   }
-  reloadForUpdate = true;
-  setMessage("Saved · applying update…", "success");
-  worker.postMessage({ type: "BATFLOW_ACTIVATE" });
-  updateActivationTimer = globalThis.setTimeout(() => {
-    reloadForUpdate = false;
-    updateActivationTimer = null;
+  const currentController = globalThis.navigator.serviceWorker.controller;
+  const currentWaiting = offlineRegistration?.waiting || pendingUpdateWorker;
+  if (currentController === worker) {
+    pendingUpdateWorker = null;
+    $("applyUpdate").classList.add("hidden");
+    setMessage("Saved · update active", "success");
+    return;
+  }
+  if (currentWaiting !== worker) {
+    if (currentWaiting) {
+      observeAvailableUpdate(currentWaiting);
+      setMessage("Saved · a different update is ready for review.", "success");
+    } else {
+      pendingUpdateWorker = null;
+      $("applyUpdate").classList.add("hidden");
+    }
+    return;
+  }
+  let revision;
+  try {
+    revision =
+      observedWaitingWorker === worker &&
+      typeof observedWaitingRevision === "string"
+        ? observedWaitingRevision
+        : await requestWorkerRevision(worker);
+  } catch (error) {
     setMessage(
-      "The update could not be activated. Your saved project remains open.",
+      "Update not applied because its revision could not be verified.",
       "error",
     );
     recordDiagnostic({
       severity: "warning",
       subsystem: "cache",
       code: "cache.update.failed",
-      detail: "No service-worker controller change was observed.",
+      detail: errorDetail(error),
     });
-  }, 10000);
+    return;
+  }
+  approvedUpdateRevision = revision;
+  reloadForUpdate = true;
+  setMessage("Saved · applying update…", "success");
+  worker.postMessage({ type: "BATFLOW_ACTIVATE" });
+  updateActivationTimer = globalThis.setTimeout(
+    reportUpdateActivationFailure,
+    10000,
+  );
 };
 
 renderConnectivity();

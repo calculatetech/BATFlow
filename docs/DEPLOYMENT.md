@@ -38,9 +38,9 @@ document response should also revalidate or resolve to the revalidated
 `index.html`.
 
 JavaScript and CSS URLs carrying the managed `?v=` shell revision may be cached
-for a long time. Do not apply an immutable rule to `service-worker.js`, even
-when its registration URL contains a query string. The application itself
-forces service-worker update checks to bypass the HTTP cache.
+for a long time. Do not apply an immutable rule to `service-worker.js`. Its
+registration URL is deliberately stable, and the application forces update
+checks to bypass the HTTP cache.
 
 Deploy the complete artifact together. Do not publish a new `index.html`
 before its referenced revisioned assets and service-worker shell are present.

@@ -21,7 +21,7 @@ function memoryStorage() {
 }
 
 test("declares the managed offline shell revision", () => {
-  assert.equal(SHELL_REVISION, "0.5.4-dev.7");
+  assert.equal(SHELL_REVISION, "0.5.4-dev.17");
 });
 
 test("reports persistent storage without requesting it again", async () => {
