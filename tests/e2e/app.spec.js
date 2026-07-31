@@ -913,8 +913,28 @@ test("a late stable activation remains recoverable after its timeout", async ({
 }) => {
   await page.addInitScript(() => {
     const nativeSetTimeout = globalThis.setTimeout;
-    globalThis.setTimeout = (callback, delay, ...arguments_) =>
-      nativeSetTimeout(callback, delay === 10000 ? 30 : delay, ...arguments_);
+    const nativeClearTimeout = globalThis.clearTimeout;
+    const controlledTimeouts = new Map();
+    let controlledTimeoutCounter = 0;
+    globalThis.setTimeout = (callback, delay, ...arguments_) => {
+      if (delay !== 10000) {
+        return nativeSetTimeout(callback, delay, ...arguments_);
+      }
+      controlledTimeoutCounter += 1;
+      const handle = 900000 + controlledTimeoutCounter;
+      controlledTimeouts.set(handle, () => callback(...arguments_));
+      return handle;
+    };
+    globalThis.clearTimeout = (handle) => {
+      if (!controlledTimeouts.delete(handle)) {
+        nativeClearTimeout(handle);
+      }
+    };
+    globalThis.__fireBatflowActivationTimeout = () => {
+      const callbacks = [...controlledTimeouts.values()];
+      controlledTimeouts.clear();
+      callbacks.forEach((callback) => callback());
+    };
     sessionStorage.setItem(
       "batflow:test-late-stable-loads",
       String(
@@ -1061,6 +1081,10 @@ test("a late stable activation remains recoverable after its timeout", async ({
   const updateButton = page.getByRole("button", { name: "Update ready" });
   await expect(updateButton).toBeVisible();
   await updateButton.click();
+  await expect
+    .poll(() => page.evaluate(() => globalThis.__batflowStableActivationPosts))
+    .toBe(1);
+  await page.evaluate(() => globalThis.__fireBatflowActivationTimeout());
   await expect(page.locator("#appMessage")).toContainText(
     "could not be activated",
   );
@@ -1093,6 +1117,10 @@ test("a late stable activation remains recoverable after its timeout", async ({
   await page.reload();
   await expect(updateButton).toBeVisible();
   await updateButton.click();
+  await expect
+    .poll(() => page.evaluate(() => globalThis.__batflowStableActivationPosts))
+    .toBe(1);
+  await page.evaluate(() => globalThis.__fireBatflowActivationTimeout());
   await expect(page.locator("#appMessage")).toContainText(
     "could not be activated",
   );
@@ -1115,6 +1143,15 @@ test("a late stable activation remains recoverable after its timeout", async ({
   await page.reload();
   await expect(updateButton).toBeVisible();
   await updateButton.click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          typeof globalThis.__releaseLateRevisionedActivation === "function",
+      ),
+    )
+    .toBe(true);
+  await page.evaluate(() => globalThis.__fireBatflowActivationTimeout());
   await expect(page.locator("#appMessage")).toContainText(
     "could not be activated",
   );
@@ -1139,6 +1176,15 @@ test("a late stable activation remains recoverable after its timeout", async ({
   await page.reload();
   await expect(updateButton).toBeVisible();
   await updateButton.click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          typeof globalThis.__releaseLateRevisionedActivation === "function",
+      ),
+    )
+    .toBe(true);
+  await page.evaluate(() => globalThis.__fireBatflowActivationTimeout());
   await expect(page.locator("#appMessage")).toContainText(
     "could not be activated",
   );
@@ -1175,6 +1221,15 @@ test("a late stable activation remains recoverable after its timeout", async ({
   await page.reload();
   await expect(updateButton).toBeVisible();
   await updateButton.click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          typeof globalThis.__releaseLateRevisionedActivation === "function",
+      ),
+    )
+    .toBe(true);
+  await page.evaluate(() => globalThis.__fireBatflowActivationTimeout());
   await expect(page.locator("#appMessage")).toContainText(
     "could not be activated",
   );
@@ -1197,6 +1252,7 @@ test("a late stable activation remains recoverable after its timeout", async ({
       ),
     )
     .toBe(true);
+  await page.evaluate(() => globalThis.__fireBatflowActivationTimeout());
   await expect(page.locator("#appMessage")).toContainText(
     "could not be activated",
   );
