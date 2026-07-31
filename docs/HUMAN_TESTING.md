@@ -69,7 +69,7 @@ probe output belong under ignored `.agent/test-results/`, not in commits.
 - Confirm an invalid or future-version project reports an error without
   replacing current work.
 - Open Diagnostics and confirm it reports product 0.5.4, shell revision
-  0.5.4-dev.17, project format 2, IndexedDB schema 1, diagnostics format 2, and
+  0.5.4-dev.27, project format 2, IndexedDB schema 1, diagnostics format 2, and
   the current interpreter profile.
 - Edit source and confirm Diagnostics transitions through Saving to Healthy,
   records the successful-save time, and retains session events after reload.

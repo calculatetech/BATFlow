@@ -91,7 +91,7 @@ test("controlled navigation keeps the active worker's cached entrypoint", async 
   assert.equal(await response.text(), "active shell");
   assert.equal(worker.fetchCount(), 0);
   assert.deepEqual(worker.openedCaches, [
-    "batflow-shell-scope:%2F:revision:0.5.4-dev.17",
+    "batflow-shell-scope:%2F:revision:0.5.4-dev.27",
   ]);
 });
 
@@ -116,7 +116,7 @@ test("controlled navigation fails closed when its active entrypoint is missing",
 });
 
 test("activation deletes only shell caches owned by its scope", async () => {
-  const rootCurrent = "batflow-shell-scope:%2F:revision:0.5.4-dev.17";
+  const rootCurrent = "batflow-shell-scope:%2F:revision:0.5.4-dev.27";
   const rootOld = "batflow-shell-scope:%2F:revision:0.5.4-dev.13";
   const nestedOld = "batflow-shell-scope:%2F-preview%2F:revision:0.5.4-dev.13";
   const worker = createWorker("/", {
@@ -141,7 +141,7 @@ test("versioned shell assets fail closed instead of reading another cache or the
   let responsePromise;
 
   worker.listeners.fetch({
-    request: new Request("https://example.test/app.js?v=0.5.4-dev.17"),
+    request: new Request("https://example.test/app.js?v=0.5.4-dev.27"),
     respondWith(value) {
       responsePromise = value;
     },
@@ -154,7 +154,7 @@ test("versioned shell assets fail closed instead of reading another cache or the
 });
 
 test("versioned shell assets are served from the active worker's own cache", async () => {
-  const assetUrl = "https://example.test/app.js?v=0.5.4-dev.17";
+  const assetUrl = "https://example.test/app.js?v=0.5.4-dev.27";
   const worker = createWorker("/", {
     cachedResponses: new Map([[assetUrl, new Response("active asset")]]),
   });

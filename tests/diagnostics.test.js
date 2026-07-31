@@ -238,14 +238,14 @@ test("diagnostics export contains safe structure and excludes raw project data",
     online: true,
     offlineCache: "ready",
     storageDurability: "best-effort",
-    shellRevision: "0.5.4-dev.17",
+    shellRevision: "0.5.4-dev.27",
     fileCount: 4,
     validationCount: 2,
   });
   const exported = JSON.stringify(document);
 
   assert.equal(document.diagnosticsFormatVersion, DIAGNOSTICS_FORMAT_VERSION);
-  assert.equal(document.versionDomains.offlineShell, "0.5.4-dev.17");
+  assert.equal(document.versionDomains.offlineShell, "0.5.4-dev.27");
   assert.equal(document.runtime.offlineCache, "ready");
   assert.equal(document.runtime.storageDurability, "best-effort");
   assert.deepEqual(document.counts, {

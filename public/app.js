@@ -3,7 +3,7 @@ import {
   norm,
   parseBatch,
   resolveBatchTarget,
-} from "./lib/batch-core.js?v=0.5.4-dev.17";
+} from "./lib/batch-core.js?v=0.5.4-dev.27";
 import {
   INTERPRETER_PROFILE,
   PROJECT_FORMAT_VERSION,
@@ -26,26 +26,26 @@ import {
   updateFileContent,
   updateProjectName,
   updateProjectSimulationScenario,
-} from "./lib/project-format.js?v=0.5.4-dev.17";
+} from "./lib/project-format.js?v=0.5.4-dev.27";
 import {
   DATABASE_VERSION,
   loadCurrentProject,
   saveCurrentProject,
-} from "./lib/storage.js?v=0.5.4-dev.17";
-import { createSaveQueue } from "./lib/save-queue.js?v=0.5.4-dev.17";
+} from "./lib/storage.js?v=0.5.4-dev.27";
+import { createSaveQueue } from "./lib/save-queue.js?v=0.5.4-dev.27";
 import {
   DIAGNOSTICS_FORMAT_VERSION,
   createDiagnosticsDocument,
   createDiagnosticsStore,
-} from "./lib/diagnostics.js?v=0.5.4-dev.17";
+} from "./lib/diagnostics.js?v=0.5.4-dev.27";
 import {
   collectOutcomeRequests,
   simulate,
-} from "./lib/simulation.js?v=0.5.4-dev.17";
+} from "./lib/simulation.js?v=0.5.4-dev.27";
 import {
   SHELL_REVISION,
   ensureStoragePersistence,
-} from "./lib/browser-runtime.js?v=0.5.4-dev.17";
+} from "./lib/browser-runtime.js?v=0.5.4-dev.27";
 
 const $ = (id) => document.getElementById(id);
 const CONNECTIVITY_SESSION_KEY = "batflow:connectivity:offline:v1";
@@ -96,6 +96,13 @@ let approvedUpdateRevision = null;
 let workerStatusRequestCounter = 0;
 let activeStatusRequestCounter = 0;
 let activeStatusRequestId = null;
+let updateApplicationCounter = 0;
+let activeUpdateApplication = null;
+let activeUpdateWorker = null;
+let expectedUpdateController = null;
+let recoverableUpdateController = null;
+let recoverableUpdateRevision = null;
+let terminalReloadAttempt = null;
 
 function escapeHtml(value) {
   return String(value ?? "").replace(
@@ -251,6 +258,14 @@ function queueSave({ immediate = false } = {}) {
   return projectSaveQueue.queue(state.project, { immediate });
 }
 
+async function saveLatestProjectForUpdate() {
+  let result;
+  do {
+    result = await queueSave({ immediate: true });
+  } while (result.status === "superseded");
+  return result;
+}
+
 function renderConnectivity() {
   $("offlineStatus").classList.toggle("hidden", !state.offline);
 }
@@ -318,6 +333,23 @@ function showAvailableUpdate(worker) {
   });
 }
 
+function restoreAvailableUpdate(worker = null, observe = true) {
+  const candidate =
+    offlineRegistration?.waiting ||
+    (worker?.state === "installed" ? worker : null);
+  pendingUpdateWorker = null;
+  if (candidate) {
+    if (observe) {
+      observeAvailableUpdate(candidate);
+    } else {
+      pendingUpdateWorker = candidate;
+      $("applyUpdate").classList.remove("hidden");
+    }
+  } else {
+    $("applyUpdate").classList.add("hidden");
+  }
+}
+
 function reconcileDuplicateWaitingWorker() {
   if (
     !observedActiveWorker ||
@@ -329,12 +361,28 @@ function reconcileDuplicateWaitingWorker() {
     return;
   }
   const worker = observedWaitingWorker;
+  try {
+    worker.postMessage({ type: "BATFLOW_ACTIVATE" });
+  } catch (error) {
+    const currentWaiting = offlineRegistration?.waiting || null;
+    pendingUpdateWorker = currentWaiting;
+    $("applyUpdate").classList.toggle("hidden", !currentWaiting);
+    if (currentWaiting && currentWaiting !== worker) {
+      observeAvailableUpdate(currentWaiting);
+    }
+    recordDiagnostic({
+      severity: "warning",
+      subsystem: "cache",
+      code: "cache.update.failed",
+      detail: errorDetail(error),
+    });
+    return;
+  }
   observedWaitingWorker = null;
   observedWaitingRevision = null;
   updateObservationToken = null;
   pendingUpdateWorker = null;
   $("applyUpdate").classList.add("hidden");
-  worker.postMessage({ type: "BATFLOW_ACTIVATE" });
 }
 
 function observeAvailableUpdate(worker) {
@@ -508,15 +556,72 @@ async function activateStableWorkerBeforeReload(expectedRevision) {
       `Stable service-worker revision ${stableRevision} does not match approved revision ${expectedRevision}.`,
     );
   }
+  const saveResult = await saveLatestProjectForUpdate();
+  if (saveResult.status !== "saved") {
+    throw new Error(
+      "The latest project changes could not be saved before stable activation.",
+    );
+  }
+  if (
+    globalThis.navigator.serviceWorker.controller !== controller ||
+    registration.waiting !== stableWorker
+  ) {
+    throw new Error(
+      "The stable service-worker registration changed before activation.",
+    );
+  }
+  expectedUpdateController = stableWorker;
+  try {
+    stableWorker.postMessage({ type: "BATFLOW_ACTIVATE" });
+  } catch (error) {
+    if (expectedUpdateController === stableWorker) {
+      expectedUpdateController = null;
+    }
+    throw error;
+  }
   pendingUpdateWorker = stableWorker;
-  stableWorker.postMessage({ type: "BATFLOW_ACTIVATE" });
+  activeUpdateWorker = stableWorker;
   return true;
 }
 
-function reportUpdateActivationFailure() {
+function beginUpdateApplication(worker = null) {
+  if (activeUpdateApplication !== null) return null;
+  updateApplicationCounter += 1;
+  activeUpdateApplication = updateApplicationCounter;
+  activeUpdateWorker = worker;
+  $("applyUpdate").disabled = true;
+  return activeUpdateApplication;
+}
+
+function finishUpdateApplication(attempt) {
+  if (activeUpdateApplication !== attempt) return;
+  activeUpdateApplication = null;
+  activeUpdateWorker = null;
+  if (terminalReloadAttempt === attempt) {
+    terminalReloadAttempt = null;
+  }
+  $("applyUpdate").disabled = false;
+}
+
+function scheduleUpdateActivationFailure(attempt) {
+  updateActivationTimer = globalThis.setTimeout(
+    () => reportUpdateActivationFailure(attempt),
+    10000,
+  );
+}
+
+function reportUpdateActivationFailure(attempt) {
+  if (activeUpdateApplication !== attempt) return;
+  const timedOutController = expectedUpdateController;
+  const timedOutRevision = approvedUpdateRevision;
   reloadForUpdate = false;
   approvedUpdateRevision = null;
+  expectedUpdateController = null;
+  recoverableUpdateController = timedOutController;
+  recoverableUpdateRevision = timedOutRevision;
   updateActivationTimer = null;
+  finishUpdateApplication(attempt);
+  restoreAvailableUpdate(timedOutController, false);
   setMessage(
     "The update could not be activated. Your saved project remains open.",
     "error",
@@ -611,37 +716,266 @@ async function registerOfflineShell() {
   globalThis.navigator.serviceWorker.addEventListener(
     "controllerchange",
     () => {
-      pendingUpdateWorker = null;
-      observedActiveWorker =
+      const controller =
         globalThis.navigator.serviceWorker.controller ||
         offlineRegistration?.active;
+      if (
+        !reloadForUpdate &&
+        controller &&
+        controller === recoverableUpdateController
+      ) {
+        const recoveredRevision = recoverableUpdateRevision;
+        recoverableUpdateController = null;
+        recoverableUpdateRevision = null;
+        if (
+          activeUpdateApplication !== null &&
+          activeUpdateWorker !== controller
+        ) {
+          requestWorkerStatus();
+          return;
+        }
+        pendingUpdateWorker = null;
+        observedActiveWorker = controller;
+        observedActiveRevision = null;
+        observedWaitingWorker = null;
+        observedWaitingRevision = null;
+        updateObservationToken = null;
+        $("applyUpdate").classList.add("hidden");
+        let lateAttempt = activeUpdateApplication;
+        if (lateAttempt === null) {
+          lateAttempt = beginUpdateApplication(controller);
+        }
+        if (lateAttempt === null) {
+          requestWorkerStatus();
+          return;
+        }
+        terminalReloadAttempt = lateAttempt;
+        if (!usesStableWorkerUrl(controller)) {
+          reloadForUpdate = true;
+          approvedUpdateRevision = recoveredRevision;
+          void (async () => {
+            try {
+              const activatedStableWorker =
+                await activateStableWorkerBeforeReload(recoveredRevision);
+              if (activeUpdateApplication !== lateAttempt || !reloadForUpdate) {
+                return;
+              }
+              if (!activatedStableWorker) {
+                throw new Error(
+                  "The stable service-worker registration was not activated.",
+                );
+              }
+              scheduleUpdateActivationFailure(lateAttempt);
+            } catch (error) {
+              if (activeUpdateApplication !== lateAttempt || !reloadForUpdate) {
+                return;
+              }
+              reloadForUpdate = false;
+              approvedUpdateRevision = null;
+              expectedUpdateController = null;
+              finishUpdateApplication(lateAttempt);
+              restoreAvailableUpdate();
+              setMessage(
+                "The update was saved, but its stable browser registration could not be completed.",
+                "error",
+              );
+              recordDiagnostic({
+                severity: "warning",
+                subsystem: "cache",
+                code: "cache.update.failed",
+                detail: errorDetail(error),
+              });
+            }
+          })();
+          return;
+        }
+        void (async () => {
+          const finalSaveResult = await saveLatestProjectForUpdate();
+          if (activeUpdateApplication !== lateAttempt) {
+            return;
+          }
+          if (globalThis.navigator.serviceWorker.controller !== controller) {
+            finishUpdateApplication(lateAttempt);
+            restoreAvailableUpdate();
+            setMessage(
+              "Reload was paused because the active browser update changed again. Your saved project remains open.",
+              "error",
+            );
+            recordDiagnostic({
+              severity: "warning",
+              subsystem: "cache",
+              code: "cache.update.failed",
+              detail:
+                "The service-worker controller changed during the late-activation save.",
+            });
+            return;
+          }
+          if (finalSaveResult.status !== "saved") {
+            finishUpdateApplication(lateAttempt);
+            setMessage(
+              "The update is active, but reload was paused because the latest project changes could not be saved.",
+              "error",
+            );
+            recordDiagnostic({
+              severity: "warning",
+              subsystem: "cache",
+              code: "cache.update.failed",
+              detail:
+                "A late update activation was not reloaded because the latest project state was not saved.",
+            });
+            return;
+          }
+          finishUpdateApplication(lateAttempt);
+          globalThis.location.reload();
+        })();
+        return;
+      }
+      if (
+        !reloadForUpdate &&
+        recoverableUpdateController !== null &&
+        controller !== recoverableUpdateController
+      ) {
+        requestWorkerStatus();
+        return;
+      }
+      if (
+        !reloadForUpdate &&
+        terminalReloadAttempt !== null &&
+        controller !== activeUpdateWorker
+      ) {
+        const interruptedAttempt = terminalReloadAttempt;
+        finishUpdateApplication(interruptedAttempt);
+        restoreAvailableUpdate();
+        setMessage(
+          "Reload was paused because the active browser update changed again. Your saved project remains open.",
+          "error",
+        );
+        recordDiagnostic({
+          severity: "warning",
+          subsystem: "cache",
+          code: "cache.update.failed",
+          detail:
+            "The service-worker controller changed during the late-activation save.",
+        });
+        requestWorkerStatus();
+        return;
+      }
+      if (
+        reloadForUpdate &&
+        controller !== expectedUpdateController &&
+        recoverableUpdateController !== null
+      ) {
+        if (
+          controller === recoverableUpdateController &&
+          activeUpdateWorker !== controller
+        ) {
+          recoverableUpdateController = null;
+          recoverableUpdateRevision = null;
+          requestWorkerStatus();
+          return;
+        }
+        if (
+          activeUpdateWorker === recoverableUpdateController &&
+          controller !== recoverableUpdateController
+        ) {
+          requestWorkerStatus();
+          return;
+        }
+      }
+      if (reloadForUpdate && controller !== expectedUpdateController) {
+        const updateAttempt = activeUpdateApplication;
+        if (updateActivationTimer !== null) {
+          globalThis.clearTimeout(updateActivationTimer);
+          updateActivationTimer = null;
+        }
+        reloadForUpdate = false;
+        approvedUpdateRevision = null;
+        expectedUpdateController = null;
+        recoverableUpdateController = null;
+        recoverableUpdateRevision = null;
+        finishUpdateApplication(updateAttempt);
+        restoreAvailableUpdate();
+        setMessage(
+          "The active browser update changed unexpectedly. Your saved project remains open.",
+          "error",
+        );
+        recordDiagnostic({
+          severity: "warning",
+          subsystem: "cache",
+          code: "cache.update.failed",
+          detail:
+            "A service-worker controller other than the approved update became active.",
+        });
+        requestWorkerStatus();
+        return;
+      }
+      recoverableUpdateController = null;
+      recoverableUpdateRevision = null;
+      expectedUpdateController = null;
+      pendingUpdateWorker = null;
+      observedActiveWorker = controller;
       observedActiveRevision = null;
       observedWaitingWorker = null;
       observedWaitingRevision = null;
       updateObservationToken = null;
       $("applyUpdate").classList.add("hidden");
       if (reloadForUpdate) {
+        const updateAttempt = activeUpdateApplication;
         if (updateActivationTimer !== null) {
           globalThis.clearTimeout(updateActivationTimer);
           updateActivationTimer = null;
         }
         void (async () => {
           try {
+            const activatedStableWorker =
+              await activateStableWorkerBeforeReload(approvedUpdateRevision);
+            if (activeUpdateApplication !== updateAttempt || !reloadForUpdate) {
+              return;
+            }
+            if (activatedStableWorker) {
+              scheduleUpdateActivationFailure(updateAttempt);
+              return;
+            }
+            const finalSaveResult = await saveLatestProjectForUpdate();
             if (
-              await activateStableWorkerBeforeReload(approvedUpdateRevision)
+              activeUpdateApplication !== updateAttempt ||
+              !reloadForUpdate ||
+              globalThis.navigator.serviceWorker.controller !== controller
             ) {
-              updateActivationTimer = globalThis.setTimeout(
-                reportUpdateActivationFailure,
-                10000,
+              return;
+            }
+            if (finalSaveResult.status !== "saved") {
+              reloadForUpdate = false;
+              approvedUpdateRevision = null;
+              expectedUpdateController = null;
+              setMessage(
+                "The update is active, but reload was paused because the latest project changes could not be saved.",
+                "error",
               );
+              recordDiagnostic({
+                severity: "warning",
+                subsystem: "cache",
+                code: "cache.update.failed",
+                detail:
+                  "Terminal reload was suppressed because the latest project state was not saved.",
+              });
+              finishUpdateApplication(updateAttempt);
               return;
             }
             reloadForUpdate = false;
             approvedUpdateRevision = null;
+            expectedUpdateController = null;
+            finishUpdateApplication(updateAttempt);
             globalThis.location.reload();
           } catch (error) {
+            if (activeUpdateApplication !== updateAttempt || !reloadForUpdate) {
+              return;
+            }
             reloadForUpdate = false;
             approvedUpdateRevision = null;
+            expectedUpdateController = null;
+            finishUpdateApplication(updateAttempt);
+            restoreAvailableUpdate();
             setMessage(
               "The update was saved, but its stable browser registration could not be completed.",
               "error",
@@ -1757,7 +2091,7 @@ async function applyPendingImport() {
   $("importDialog").close();
   resetImportDialog();
   render();
-  const saveResult = await queueSave({ immediate: true });
+  const saveResult = await saveLatestProjectForUpdate();
   recordDiagnostic({
     severity: "info",
     subsystem: "runtime",
@@ -2035,20 +2369,25 @@ $("applyUpdate").onclick = async () => {
     $("applyUpdate").classList.add("hidden");
     return;
   }
-  const saveResult = await queueSave({ immediate: true });
+  const updateAttempt = beginUpdateApplication(worker);
+  if (updateAttempt === null) return;
+  const saveResult = await saveLatestProjectForUpdate();
   if (saveResult.status !== "saved") {
     setMessage(
       "Update not applied because the current project could not be saved.",
       "error",
     );
+    finishUpdateApplication(updateAttempt);
     return;
   }
   const currentController = globalThis.navigator.serviceWorker.controller;
   const currentWaiting = offlineRegistration?.waiting || pendingUpdateWorker;
   if (currentController === worker) {
+    if (terminalReloadAttempt === updateAttempt) return;
     pendingUpdateWorker = null;
     $("applyUpdate").classList.add("hidden");
     setMessage("Saved · update active", "success");
+    finishUpdateApplication(updateAttempt);
     return;
   }
   if (currentWaiting !== worker) {
@@ -2059,6 +2398,7 @@ $("applyUpdate").onclick = async () => {
       pendingUpdateWorker = null;
       $("applyUpdate").classList.add("hidden");
     }
+    finishUpdateApplication(updateAttempt);
     return;
   }
   let revision;
@@ -2079,24 +2419,75 @@ $("applyUpdate").onclick = async () => {
       code: "cache.update.failed",
       detail: errorDetail(error),
     });
+    finishUpdateApplication(updateAttempt);
+    return;
+  }
+  const finalSaveResult = await saveLatestProjectForUpdate();
+  if (finalSaveResult.status !== "saved") {
+    setMessage(
+      "Update not applied because the latest project changes could not be saved.",
+      "error",
+    );
+    finishUpdateApplication(updateAttempt);
+    return;
+  }
+  const finalController = globalThis.navigator.serviceWorker.controller;
+  const finalWaiting = offlineRegistration?.waiting || pendingUpdateWorker;
+  if (finalController === worker) {
+    if (terminalReloadAttempt === updateAttempt) return;
+    pendingUpdateWorker = null;
+    $("applyUpdate").classList.add("hidden");
+    setMessage("Saved · update active", "success");
+    finishUpdateApplication(updateAttempt);
+    return;
+  }
+  if (finalWaiting !== worker) {
+    if (finalWaiting) {
+      observeAvailableUpdate(finalWaiting);
+      setMessage("Saved · a different update is ready for review.", "success");
+    } else {
+      pendingUpdateWorker = null;
+      $("applyUpdate").classList.add("hidden");
+    }
+    finishUpdateApplication(updateAttempt);
     return;
   }
   approvedUpdateRevision = revision;
   reloadForUpdate = true;
+  expectedUpdateController = worker;
   setMessage("Saved · applying update…", "success");
-  worker.postMessage({ type: "BATFLOW_ACTIVATE" });
-  updateActivationTimer = globalThis.setTimeout(
-    reportUpdateActivationFailure,
-    10000,
-  );
+  try {
+    worker.postMessage({ type: "BATFLOW_ACTIVATE" });
+    scheduleUpdateActivationFailure(updateAttempt);
+  } catch (error) {
+    reloadForUpdate = false;
+    approvedUpdateRevision = null;
+    expectedUpdateController = null;
+    finishUpdateApplication(updateAttempt);
+    restoreAvailableUpdate(worker);
+    setMessage(
+      "The update could not be activated. Your saved project remains open.",
+      "error",
+    );
+    recordDiagnostic({
+      severity: "warning",
+      subsystem: "cache",
+      code: "cache.update.failed",
+      detail: errorDetail(error),
+    });
+  }
 };
 
 renderConnectivity();
 if (state.offline) scheduleConnectivityProbe();
 globalThis.addEventListener("offline", () => setConnectivity(true));
 globalThis.addEventListener("online", () => {
-  setConnectivity(false);
-  void checkForShellUpdate();
+  activeStatusRequestId = null;
+  if (state.offline) {
+    scheduleConnectivityProbe();
+  } else {
+    void checkForShellUpdate();
+  }
 });
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") {
