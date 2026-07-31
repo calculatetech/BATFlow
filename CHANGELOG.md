@@ -21,8 +21,9 @@ and interpreter-profile versions are managed separately.
 
 ### Changed
 
-- HTML navigation now revalidates online instead of relying on a potentially
-  stale browser cache; revisioned shell assets remain coherent offline.
+- Controlled HTML navigation stays on the active cached entrypoint until an
+  available update is explicitly activated; revisioned shell assets remain
+  coherent offline.
 - Deployment and compatibility documentation now defines HTTPS, cache-header,
   subpath, eviction, and supported-browser behavior.
 
