@@ -20,9 +20,11 @@ function createWorker(scopePath, options = {}) {
   const cache = {
     addAll: async () => {},
     match: async (request) =>
-      options.cachedResponses?.get(
-        typeof request === "string" ? request : request.url,
-      ) || null,
+      options.cacheContainsAll
+        ? new Response("cached shell")
+        : options.cachedResponses?.get(
+            typeof request === "string" ? request : request.url,
+          ) || null,
   };
   const context = {
     Request,
@@ -69,6 +71,24 @@ function createWorker(scopePath, options = {}) {
   };
 }
 
+async function requestStatus(worker, requestId = "test-status") {
+  let statusPromise;
+  let status;
+  worker.listeners.message({
+    data: { type: "BATFLOW_STATUS_REQUEST", requestId },
+    source: {
+      postMessage(message) {
+        status = message;
+      },
+    },
+    waitUntil(value) {
+      statusPromise = value;
+    },
+  });
+  await statusPromise;
+  return status;
+}
+
 test("controlled navigation keeps the active worker's cached entrypoint", async () => {
   const indexUrl = "https://example.test/index.html";
   const worker = createWorker("/", {
@@ -91,7 +111,7 @@ test("controlled navigation keeps the active worker's cached entrypoint", async 
   assert.equal(await response.text(), "active shell");
   assert.equal(worker.fetchCount(), 0);
   assert.deepEqual(worker.openedCaches, [
-    "batflow-shell-scope:%2F:revision:0.5.4-dev.27",
+    "batflow-shell-scope:%2F:revision:0.5.4-dev.29",
   ]);
 });
 
@@ -116,7 +136,7 @@ test("controlled navigation fails closed when its active entrypoint is missing",
 });
 
 test("activation deletes only shell caches owned by its scope", async () => {
-  const rootCurrent = "batflow-shell-scope:%2F:revision:0.5.4-dev.27";
+  const rootCurrent = "batflow-shell-scope:%2F:revision:0.5.4-dev.29";
   const rootOld = "batflow-shell-scope:%2F:revision:0.5.4-dev.13";
   const nestedOld = "batflow-shell-scope:%2F-preview%2F:revision:0.5.4-dev.13";
   const worker = createWorker("/", {
@@ -141,7 +161,7 @@ test("versioned shell assets fail closed instead of reading another cache or the
   let responsePromise;
 
   worker.listeners.fetch({
-    request: new Request("https://example.test/app.js?v=0.5.4-dev.27"),
+    request: new Request("https://example.test/app.js?v=0.5.4-dev.29"),
     respondWith(value) {
       responsePromise = value;
     },
@@ -154,7 +174,7 @@ test("versioned shell assets fail closed instead of reading another cache or the
 });
 
 test("versioned shell assets are served from the active worker's own cache", async () => {
-  const assetUrl = "https://example.test/app.js?v=0.5.4-dev.27";
+  const assetUrl = "https://example.test/app.js?v=0.5.4-dev.29";
   const worker = createWorker("/", {
     cachedResponses: new Map([[assetUrl, new Response("active asset")]]),
   });
@@ -170,4 +190,17 @@ test("versioned shell assets are served from the active worker's own cache", asy
   const response = await responsePromise;
   assert.equal(await response.text(), "active asset");
   assert.equal(worker.fetchCount(), 0);
+});
+
+test("status verifies the complete active shell cache", async () => {
+  const missingShell = createWorker("/");
+  const completeShell = createWorker("/", { cacheContainsAll: true });
+
+  const missingStatus = await requestStatus(missingShell, "missing");
+  const completeStatus = await requestStatus(completeShell, "complete");
+
+  assert.equal(missingStatus.requestId, "missing");
+  assert.equal(missingStatus.cacheReady, false);
+  assert.equal(completeStatus.requestId, "complete");
+  assert.equal(completeStatus.cacheReady, true);
 });

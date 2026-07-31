@@ -1,4 +1,4 @@
-const SHELL_REVISION = "0.5.4-dev.27";
+const SHELL_REVISION = "0.5.4-dev.29";
 const SCOPE_URL = new URL("./", globalThis.location.href);
 const CACHE_PREFIX = `batflow-shell-scope:${encodeURIComponent(
   SCOPE_URL.pathname,
@@ -106,10 +106,14 @@ globalThis.addEventListener("message", (event) => {
         } catch {
           offline = true;
         }
+        const cache = await caches.open(CACHE_NAME);
+        const cachedShell = await Promise.all(
+          SHELL_URLS.map((url) => cache.match(url)),
+        );
         source?.postMessage({
           type: "BATFLOW_STATUS",
           requestId: event.data.requestId,
-          cacheReady: true,
+          cacheReady: cachedShell.every(Boolean),
           offline,
           shellRevision: SHELL_REVISION,
         });

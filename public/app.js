@@ -3,7 +3,7 @@ import {
   norm,
   parseBatch,
   resolveBatchTarget,
-} from "./lib/batch-core.js?v=0.5.4-dev.27";
+} from "./lib/batch-core.js?v=0.5.4-dev.29";
 import {
   INTERPRETER_PROFILE,
   PROJECT_FORMAT_VERSION,
@@ -26,26 +26,26 @@ import {
   updateFileContent,
   updateProjectName,
   updateProjectSimulationScenario,
-} from "./lib/project-format.js?v=0.5.4-dev.27";
+} from "./lib/project-format.js?v=0.5.4-dev.29";
 import {
   DATABASE_VERSION,
   loadCurrentProject,
   saveCurrentProject,
-} from "./lib/storage.js?v=0.5.4-dev.27";
-import { createSaveQueue } from "./lib/save-queue.js?v=0.5.4-dev.27";
+} from "./lib/storage.js?v=0.5.4-dev.29";
+import { createSaveQueue } from "./lib/save-queue.js?v=0.5.4-dev.29";
 import {
   DIAGNOSTICS_FORMAT_VERSION,
   createDiagnosticsDocument,
   createDiagnosticsStore,
-} from "./lib/diagnostics.js?v=0.5.4-dev.27";
+} from "./lib/diagnostics.js?v=0.5.4-dev.29";
 import {
   collectOutcomeRequests,
   simulate,
-} from "./lib/simulation.js?v=0.5.4-dev.27";
+} from "./lib/simulation.js?v=0.5.4-dev.29";
 import {
   SHELL_REVISION,
   ensureStoragePersistence,
-} from "./lib/browser-runtime.js?v=0.5.4-dev.27";
+} from "./lib/browser-runtime.js?v=0.5.4-dev.29";
 
 const $ = (id) => document.getElementById(id);
 const CONNECTIVITY_SESSION_KEY = "batflow:connectivity:offline:v1";
@@ -86,6 +86,7 @@ let reloadForUpdate = false;
 let updateActivationTimer = null;
 let pendingUpdateWorker = null;
 let connectivityProbeTimer = null;
+let connectivityEpoch = 0;
 let observedActiveWorker = null;
 let observedActiveRevision = null;
 let observedWaitingWorker = null;
@@ -103,6 +104,7 @@ let expectedUpdateController = null;
 let recoverableUpdateController = null;
 let recoverableUpdateRevision = null;
 let terminalReloadAttempt = null;
+let offlineCacheReadyRecorded = false;
 
 function escapeHtml(value) {
   return String(value ?? "").replace(
@@ -270,28 +272,40 @@ function renderConnectivity() {
   $("offlineStatus").classList.toggle("hidden", !state.offline);
 }
 
+async function originIsReachable() {
+  try {
+    const response = await fetch(
+      `./service-worker.js?connectivity=${Date.now()}`,
+      {
+        cache: "no-store",
+        method: "HEAD",
+      },
+    );
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 function scheduleConnectivityProbe() {
   if (!state.offline || connectivityProbeTimer !== null) return;
   connectivityProbeTimer = globalThis.setTimeout(async () => {
     connectivityProbeTimer = null;
-    try {
-      const response = await fetch(
-        `./service-worker.js?connectivity=${Date.now()}`,
-        {
-          cache: "no-store",
-          method: "HEAD",
-        },
-      );
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    connectivityEpoch += 1;
+    const probeEpoch = connectivityEpoch;
+    const reachable = await originIsReachable();
+    if (probeEpoch !== connectivityEpoch) return;
+    if (reachable) {
       setConnectivity(false);
       void checkForShellUpdate();
-    } catch {
+    } else {
       scheduleConnectivityProbe();
     }
   }, 1000);
 }
 
 function setConnectivity(offline) {
+  connectivityEpoch += 1;
   activeStatusRequestId = null;
   state.offline = Boolean(offline);
   try {
@@ -711,6 +725,20 @@ async function registerOfflineShell() {
         : SHELL_REVISION;
     if (event.data.cacheReady) {
       setOfflineCacheState("ready", `Ready · ${state.activeShellRevision}`);
+      if (!offlineCacheReadyRecorded) {
+        offlineCacheReadyRecorded = true;
+        recordDiagnostic({
+          severity: "info",
+          subsystem: "cache",
+          code: "cache.install.ready",
+          detail: `Offline shell ${state.activeShellRevision} is ready.`,
+        });
+      }
+    } else {
+      setOfflineCacheState(
+        "failed",
+        "The offline application shell is incomplete.",
+      );
     }
   });
   globalThis.navigator.serviceWorker.addEventListener(
@@ -1011,13 +1039,7 @@ async function registerOfflineShell() {
     }
     const ready = await globalThis.navigator.serviceWorker.ready;
     offlineRegistration = ready;
-    setOfflineCacheState("ready", `Ready · ${SHELL_REVISION}`);
-    recordDiagnostic({
-      severity: "info",
-      subsystem: "cache",
-      code: "cache.install.ready",
-      detail: `Offline shell ${SHELL_REVISION} is ready.`,
-    });
+    setOfflineCacheState("checking", "Verifying the offline shell.");
     requestWorkerStatus();
   } catch (error) {
     setOfflineCacheState("failed", errorDetail(error));
@@ -1038,7 +1060,12 @@ async function checkForShellUpdate() {
       observeAvailableUpdate(offlineRegistration.waiting);
     }
   } catch {
-    // The active cache remains usable; reconnecting will trigger another check.
+    connectivityEpoch += 1;
+    const probeEpoch = connectivityEpoch;
+    const reachable = await originIsReachable();
+    if (probeEpoch === connectivityEpoch && !reachable) {
+      setConnectivity(true);
+    }
   }
 }
 
@@ -2482,6 +2509,7 @@ renderConnectivity();
 if (state.offline) scheduleConnectivityProbe();
 globalThis.addEventListener("offline", () => setConnectivity(true));
 globalThis.addEventListener("online", () => {
+  connectivityEpoch += 1;
   activeStatusRequestId = null;
   if (state.offline) {
     scheduleConnectivityProbe();

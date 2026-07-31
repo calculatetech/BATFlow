@@ -62,7 +62,7 @@ test("starts empty, exposes the managed version, and has no serious axe violatio
     "msdos-7.1-command.com",
   );
   await expect(page.locator("#diagnosticsVersions")).toContainText(
-    "0.5.4-dev.27",
+    "0.5.4-dev.29",
   );
   await expect(page.locator("#diagnosticsCacheState")).toContainText("Ready");
   await expect(page.locator("#diagnosticsDurabilityState")).toHaveText(
@@ -190,6 +190,155 @@ test("an obsolete active-worker status cannot restore stale offline state", asyn
   await expect(page.locator("#diagnosticsVersions")).not.toContainText(
     "0.5.4-test-stale",
   );
+});
+
+test("status detects an incomplete shell and update failures confirm origin reachability", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const nativeFetch = globalThis.fetch.bind(globalThis);
+    const container = new EventTarget();
+    const registration = new EventTarget();
+    const active = {
+      scriptURL: "http://127.0.0.1:41740/service-worker.js",
+      postMessage(message) {
+        if (message.type !== "BATFLOW_STATUS_REQUEST") return;
+        const event = new Event("message");
+        Object.defineProperties(event, {
+          data: {
+            value: {
+              type: "BATFLOW_STATUS",
+              requestId: message.requestId,
+              cacheReady: globalThis.__batflowTestCacheReady,
+              offline: false,
+              shellRevision: "0.5.4-test-status",
+            },
+          },
+          source: { value: active },
+        });
+        globalThis.setTimeout(() => container.dispatchEvent(event), 0);
+      },
+    };
+    registration.active = active;
+    registration.installing = null;
+    registration.waiting = null;
+    registration.update = async () => {
+      throw new TypeError("Forced update fetch failure");
+    };
+    container.controller = active;
+    container.ready = Promise.resolve(registration);
+    container.register = async () => registration;
+    globalThis.__batflowTestCacheReady = true;
+    globalThis.__batflowTestOriginFailure = false;
+    globalThis.__batflowHoldOriginProbes = false;
+    globalThis.__batflowOriginProbes = [];
+    globalThis.__refreshBatflowWorkerStatus = () =>
+      container.dispatchEvent(new Event("controllerchange"));
+    globalThis.__settleBatflowOriginProbe = (index, reachable) => {
+      const probe = globalThis.__batflowOriginProbes[index];
+      if (reachable) {
+        probe.resolve(new Response("", { status: 200 }));
+      } else {
+        probe.reject(new TypeError("Forced deferred origin failure"));
+      }
+    };
+    globalThis.fetch = (input, options) => {
+      const url = typeof input === "string" ? input : input.url;
+      if (
+        globalThis.__batflowHoldOriginProbes &&
+        String(url).includes("connectivity=")
+      ) {
+        return new Promise((resolve, reject) => {
+          globalThis.__batflowOriginProbes.push({ reject, resolve });
+        });
+      }
+      if (
+        globalThis.__batflowTestOriginFailure &&
+        String(url).includes("connectivity=")
+      ) {
+        return Promise.reject(new TypeError("Forced origin failure"));
+      }
+      return nativeFetch(input, options);
+    };
+    Object.defineProperty(globalThis.navigator, "serviceWorker", {
+      configurable: true,
+      value: container,
+    });
+  });
+
+  await page.goto("/");
+  await expect(page.locator("#diagnosticsCacheState")).toContainText("Ready");
+
+  await page.evaluate(() => {
+    globalThis.__batflowTestCacheReady = false;
+    globalThis.__refreshBatflowWorkerStatus();
+  });
+  await expect(page.locator("#diagnosticsCacheState")).toHaveText("Failed");
+
+  await page.evaluate(() => {
+    globalThis.__batflowTestCacheReady = true;
+    globalThis.__refreshBatflowWorkerStatus();
+  });
+  await expect(page.locator("#diagnosticsCacheState")).toContainText("Ready");
+
+  await page.evaluate(() => {
+    globalThis.__batflowTestOriginFailure = true;
+    globalThis.dispatchEvent(new Event("online"));
+  });
+  await expect(page.locator("#offlineStatus")).toBeVisible();
+  expect(
+    await page.evaluate(() =>
+      sessionStorage.getItem("batflow:connectivity:offline:v1"),
+    ),
+  ).toBe("1");
+
+  await page.evaluate(() => {
+    globalThis.__batflowTestOriginFailure = false;
+  });
+  await expect(page.locator("#offlineStatus")).toBeHidden();
+
+  await page.evaluate(() => {
+    globalThis.__batflowHoldOriginProbes = true;
+    globalThis.dispatchEvent(new Event("online"));
+  });
+  await expect
+    .poll(() => page.evaluate(() => globalThis.__batflowOriginProbes.length))
+    .toBe(1);
+  await page.evaluate(() => {
+    globalThis.dispatchEvent(new Event("offline"));
+    globalThis.__settleBatflowOriginProbe(0, true);
+  });
+  await page.waitForTimeout(100);
+  await expect(page.locator("#offlineStatus")).toBeVisible();
+  expect(
+    await page.evaluate(() =>
+      sessionStorage.getItem("batflow:connectivity:offline:v1"),
+    ),
+  ).toBe("1");
+
+  await page.evaluate(() =>
+    sessionStorage.removeItem("batflow:connectivity:offline:v1"),
+  );
+  await page.reload();
+  await page.evaluate(() => {
+    globalThis.__batflowHoldOriginProbes = true;
+    globalThis.dispatchEvent(new Event("online"));
+    globalThis.dispatchEvent(new Event("online"));
+  });
+  await expect
+    .poll(() => page.evaluate(() => globalThis.__batflowOriginProbes.length))
+    .toBe(2);
+  await page.evaluate(() => {
+    globalThis.__settleBatflowOriginProbe(1, true);
+    globalThis.__settleBatflowOriginProbe(0, false);
+  });
+  await page.waitForTimeout(100);
+  await expect(page.locator("#offlineStatus")).toBeHidden();
+  expect(
+    await page.evaluate(() =>
+      sessionStorage.getItem("batflow:connectivity:offline:v1"),
+    ),
+  ).toBeNull();
 });
 
 test("a controlled reload keeps the active entrypoint until update activation", async ({
@@ -2112,7 +2261,7 @@ test("diagnostics track saves across reload and export only redacted context", a
     projectFormat: 2,
     indexedDbSchema: 1,
     interpreterProfile: "msdos-7.1-command.com",
-    offlineShell: "0.5.4-dev.27",
+    offlineShell: "0.5.4-dev.29",
   });
   expect(exported.document.runtime.offlineCache).toBe("ready");
   expect(["persistent", "best-effort", "unsupported", "unknown"]).toContain(
