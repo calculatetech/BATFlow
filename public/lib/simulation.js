@@ -8,7 +8,7 @@ import {
   parseDosArgs,
   resolveBatchTarget,
   stripCommandPrefix,
-} from "./batch-core.js?v=0.5.4-dev.29";
+} from "./batch-core.js?v=0.5.4-dev.30";
 
 function actionInfo(action, path, projectFiles) {
   const text = stripCommandPrefix(action);

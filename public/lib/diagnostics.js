@@ -119,7 +119,7 @@ function aggregateHealth(subsystems) {
   }
   if (
     subsystems.retention.status === "attention" ||
-    subsystems.cache.status === "attention" ||
+    ["attention", "checking"].includes(subsystems.cache.status) ||
     ["attention", "checking"].includes(subsystems.storage.status)
   ) {
     return "attention";

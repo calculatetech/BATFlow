@@ -65,8 +65,8 @@ try {
 
   const index = await (await request("/", 200)).text();
   assert.match(index, /<title>BATFlow/);
-  assert.match(index, /src="app\.js\?v=0\.5\.4-dev\.29"/);
-  assert.match(index, /href="styles\.css\?v=0\.5\.4-dev\.29"/);
+  assert.match(index, /src="app\.js\?v=0\.5\.4-dev\.30"/);
+  assert.match(index, /href="styles\.css\?v=0\.5\.4-dev\.30"/);
 
   await request("/app.js", 200);
   await request("/service-worker.js", 200);

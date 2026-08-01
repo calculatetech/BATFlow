@@ -1,4 +1,4 @@
-const SHELL_REVISION = "0.5.4-dev.29";
+const SHELL_REVISION = "0.5.4-dev.30";
 const SCOPE_URL = new URL("./", globalThis.location.href);
 const CACHE_PREFIX = `batflow-shell-scope:${encodeURIComponent(
   SCOPE_URL.pathname,

@@ -70,6 +70,8 @@ test("active health has deterministic precedence and survives history clearing",
   });
   assert.equal(store.getSnapshot().health, "attention");
   store.setSubsystem("storage", "healthy");
+  assert.equal(store.getSnapshot().health, "attention");
+  store.setSubsystem("cache", "healthy");
   assert.equal(store.getSnapshot().health, "healthy");
   store.setSubsystem("save", "unsaved");
   assert.equal(store.getSnapshot().health, "saving");
@@ -238,14 +240,14 @@ test("diagnostics export contains safe structure and excludes raw project data",
     online: true,
     offlineCache: "ready",
     storageDurability: "best-effort",
-    shellRevision: "0.5.4-dev.29",
+    shellRevision: "0.5.4-dev.30",
     fileCount: 4,
     validationCount: 2,
   });
   const exported = JSON.stringify(document);
 
   assert.equal(document.diagnosticsFormatVersion, DIAGNOSTICS_FORMAT_VERSION);
-  assert.equal(document.versionDomains.offlineShell, "0.5.4-dev.29");
+  assert.equal(document.versionDomains.offlineShell, "0.5.4-dev.30");
   assert.equal(document.runtime.offlineCache, "ready");
   assert.equal(document.runtime.storageDurability, "best-effort");
   assert.deepEqual(document.counts, {

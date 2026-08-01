@@ -1,4 +1,4 @@
-export const SHELL_REVISION = "0.5.4-dev.29";
+export const SHELL_REVISION = "0.5.4-dev.30";
 export const PERSISTENCE_REQUESTED_KEY =
   "batflow:storage-persistence-requested:v1";
 

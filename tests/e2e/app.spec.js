@@ -47,7 +47,7 @@ test("starts empty, exposes the managed version, and has no serious axe violatio
   await expect(page.locator("#statusText")).toContainText("development");
   await expect(page.getByText("No file selected.").first()).toBeVisible();
   await expect(page.locator("#diagnosticsBadge")).toHaveText("Healthy");
-  await page.getByRole("button", { name: "Diagnostics: Healthy" }).click();
+  await page.locator("#openDiagnostics").click();
   await expect(page.getByRole("dialog", { name: "Diagnostics" })).toBeVisible();
   await expect(page.locator("#diagnosticsOverall")).toContainText("Healthy");
   await expect(page.locator("#diagnosticsSaveState")).toHaveText("Idle");
@@ -62,7 +62,7 @@ test("starts empty, exposes the managed version, and has no serious axe violatio
     "msdos-7.1-command.com",
   );
   await expect(page.locator("#diagnosticsVersions")).toContainText(
-    "0.5.4-dev.29",
+    "0.5.4-dev.30",
   );
   await expect(page.locator("#diagnosticsCacheState")).toContainText("Ready");
   await expect(page.locator("#diagnosticsDurabilityState")).toHaveText(
@@ -186,7 +186,8 @@ test("an obsolete active-worker status cannot restore stale offline state", asyn
       sessionStorage.getItem("batflow:connectivity:offline:v1"),
     ),
   ).toBeNull();
-  await page.getByRole("button", { name: "Diagnostics: Healthy" }).click();
+  await expect(page.locator("#diagnosticsBadge")).toHaveText("Attention");
+  await page.locator("#openDiagnostics").click();
   await expect(page.locator("#diagnosticsVersions")).not.toContainText(
     "0.5.4-test-stale",
   );
@@ -216,7 +217,11 @@ test("status detects an incomplete shell and update failures confirm origin reac
           },
           source: { value: active },
         });
-        globalThis.setTimeout(() => container.dispatchEvent(event), 0);
+        if (globalThis.__batflowHoldWorkerStatus) {
+          globalThis.__batflowWorkerStatuses.push(event);
+        } else {
+          globalThis.setTimeout(() => container.dispatchEvent(event), 0);
+        }
       },
     };
     registration.active = active;
@@ -229,11 +234,19 @@ test("status detects an incomplete shell and update failures confirm origin reac
     container.ready = Promise.resolve(registration);
     container.register = async () => registration;
     globalThis.__batflowTestCacheReady = true;
+    globalThis.__batflowHoldWorkerStatus = true;
+    globalThis.__batflowWorkerStatuses = [];
     globalThis.__batflowTestOriginFailure = false;
     globalThis.__batflowHoldOriginProbes = false;
     globalThis.__batflowOriginProbes = [];
     globalThis.__refreshBatflowWorkerStatus = () =>
       container.dispatchEvent(new Event("controllerchange"));
+    globalThis.__releaseBatflowWorkerStatus = () => {
+      globalThis.__batflowHoldWorkerStatus = false;
+      for (const event of globalThis.__batflowWorkerStatuses.splice(0)) {
+        container.dispatchEvent(event);
+      }
+    };
     globalThis.__settleBatflowOriginProbe = (index, reachable) => {
       const probe = globalThis.__batflowOriginProbes[index];
       if (reachable) {
@@ -267,6 +280,14 @@ test("status detects an incomplete shell and update failures confirm origin reac
   });
 
   await page.goto("/");
+  await expect(page.locator("#diagnosticsStorageState")).toHaveText("Healthy");
+  await expect(page.locator("#diagnosticsBadge")).toHaveText("Attention");
+  await page.locator("#openDiagnostics").click();
+  await expect(page.locator("#diagnosticsOverall")).toContainText(
+    "cache: Verifying the offline shell.",
+  );
+  await page.locator("#closeDiagnostics").click();
+  await page.evaluate(() => globalThis.__releaseBatflowWorkerStatus());
   await expect(page.locator("#diagnosticsCacheState")).toContainText("Ready");
 
   await page.evaluate(() => {
@@ -2261,7 +2282,7 @@ test("diagnostics track saves across reload and export only redacted context", a
     projectFormat: 2,
     indexedDbSchema: 1,
     interpreterProfile: "msdos-7.1-command.com",
-    offlineShell: "0.5.4-dev.29",
+    offlineShell: "0.5.4-dev.30",
   });
   expect(exported.document.runtime.offlineCache).toBe("ready");
   expect(["persistent", "best-effort", "unsupported", "unknown"]).toContain(

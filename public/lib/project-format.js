@@ -7,7 +7,7 @@ import {
   normalizeProjectPath,
   reconcileLineIds,
   splitSource,
-} from "./batch-core.js?v=0.5.4-dev.29";
+} from "./batch-core.js?v=0.5.4-dev.30";
 
 export const PRODUCT_NAME = "BATFlow";
 export const PRODUCT_VERSION = "0.5.4";

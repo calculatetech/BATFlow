@@ -3,7 +3,7 @@ import {
   norm,
   parseBatch,
   resolveBatchTarget,
-} from "./lib/batch-core.js?v=0.5.4-dev.29";
+} from "./lib/batch-core.js?v=0.5.4-dev.30";
 import {
   INTERPRETER_PROFILE,
   PROJECT_FORMAT_VERSION,
@@ -26,26 +26,26 @@ import {
   updateFileContent,
   updateProjectName,
   updateProjectSimulationScenario,
-} from "./lib/project-format.js?v=0.5.4-dev.29";
+} from "./lib/project-format.js?v=0.5.4-dev.30";
 import {
   DATABASE_VERSION,
   loadCurrentProject,
   saveCurrentProject,
-} from "./lib/storage.js?v=0.5.4-dev.29";
-import { createSaveQueue } from "./lib/save-queue.js?v=0.5.4-dev.29";
+} from "./lib/storage.js?v=0.5.4-dev.30";
+import { createSaveQueue } from "./lib/save-queue.js?v=0.5.4-dev.30";
 import {
   DIAGNOSTICS_FORMAT_VERSION,
   createDiagnosticsDocument,
   createDiagnosticsStore,
-} from "./lib/diagnostics.js?v=0.5.4-dev.29";
+} from "./lib/diagnostics.js?v=0.5.4-dev.30";
 import {
   collectOutcomeRequests,
   simulate,
-} from "./lib/simulation.js?v=0.5.4-dev.29";
+} from "./lib/simulation.js?v=0.5.4-dev.30";
 import {
   SHELL_REVISION,
   ensureStoragePersistence,
-} from "./lib/browser-runtime.js?v=0.5.4-dev.29";
+} from "./lib/browser-runtime.js?v=0.5.4-dev.30";
 
 const $ = (id) => document.getElementById(id);
 const CONNECTIVITY_SESSION_KEY = "batflow:connectivity:offline:v1";
@@ -1734,7 +1734,7 @@ function renderDiagnostics() {
   $("diagnosticsBadge").textContent = overall;
 
   const active = Object.entries(snapshot.subsystems).filter(([, value]) =>
-    ["attention", "error"].includes(value.status),
+    ["attention", "checking", "error"].includes(value.status),
   );
   $("diagnosticsOverall").className =
     `diagnostics-overall ${snapshot.health}`.trim();
