@@ -62,7 +62,7 @@ test("starts empty, exposes the managed version, and has no serious axe violatio
     "msdos-7.1-command.com",
   );
   await expect(page.locator("#diagnosticsVersions")).toContainText(
-    "0.5.4-dev.30",
+    "0.5.4-dev.33",
   );
   await expect(page.locator("#diagnosticsCacheState")).toContainText("Ready");
   await expect(page.locator("#diagnosticsDurabilityState")).toHaveText(
@@ -411,7 +411,7 @@ test("an identical waiting registration canonicalizes without another click", as
             requestId,
             cacheReady: true,
             offline: false,
-            shellRevision: "0.5.4-test-same",
+            shellRevision: "0.5.4-dev.33",
           },
         },
         source: { value: source },
@@ -613,7 +613,7 @@ test("a click racing identical-registration reconciliation does not reactivate",
             requestId,
             cacheReady: true,
             offline: false,
-            shellRevision: "0.5.4-test-same",
+            shellRevision: "0.5.4-dev.33",
           },
         },
         source: { value: source },
@@ -687,6 +687,192 @@ test("a click racing identical-registration reconciliation does not reactivate",
     await page.evaluate(() => globalThis.__batflowRaceActivationCount),
   ).toBe(1);
   await expect(page.getByRole("button", { name: "Update ready" })).toBeHidden();
+});
+
+test("a selected update activated by another tab reloads after saving", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const complete =
+      sessionStorage.getItem("batflow:test-other-tab-update") === "complete";
+    const container = new EventTarget();
+    const registration = new EventTarget();
+    const pendingStatus = new Map();
+    const sendStatus = (source, requestId, shellRevision) => {
+      const event = new Event("message");
+      Object.defineProperties(event, {
+        data: {
+          value: {
+            type: "BATFLOW_STATUS",
+            requestId,
+            cacheReady: true,
+            offline: false,
+            shellRevision,
+          },
+        },
+        source: { value: source },
+      });
+      container.dispatchEvent(event);
+    };
+    const active = {
+      scriptURL: "http://127.0.0.1:41740/service-worker.js",
+      postMessage(message) {
+        if (message.type === "BATFLOW_STATUS_REQUEST") {
+          if (!complete && String(message.requestId).endsWith(":active")) {
+            pendingStatus.set("active", () =>
+              sendStatus(active, message.requestId, "0.5.4-test-new"),
+            );
+          } else {
+            sendStatus(active, message.requestId, "0.5.4-test-new");
+          }
+        }
+      },
+    };
+    const waiting = new EventTarget();
+    waiting.state = "installed";
+    waiting.scriptURL = "http://127.0.0.1:41740/service-worker.js";
+    waiting.postMessage = (message) => {
+      if (message.type === "BATFLOW_STATUS_REQUEST") {
+        if (!complete && String(message.requestId).endsWith(":waiting")) {
+          pendingStatus.set("waiting", () =>
+            sendStatus(waiting, message.requestId, "0.5.4-test-new"),
+          );
+        } else {
+          sendStatus(waiting, message.requestId, "0.5.4-test-new");
+        }
+      }
+    };
+    registration.active = complete ? waiting : active;
+    registration.installing = null;
+    registration.waiting = complete ? null : waiting;
+    registration.update = async () => {};
+    container.controller = registration.active;
+    container.ready = Promise.resolve(registration);
+    container.register = async () => registration;
+    globalThis.__releaseNewerDuplicateStatus = () => {
+      pendingStatus.get("active")?.();
+      pendingStatus.get("waiting")?.();
+    };
+    globalThis.__activateBatflowUpdateFromOtherTab = () => {
+      sessionStorage.setItem("batflow:test-other-tab-update", "complete");
+      registration.active = waiting;
+      registration.waiting = null;
+      container.controller = waiting;
+      container.dispatchEvent(new Event("controllerchange"));
+    };
+    Object.defineProperty(globalThis.navigator, "serviceWorker", {
+      configurable: true,
+      value: container,
+    });
+  });
+
+  await page.goto("/");
+  await importFiles(page, {
+    name: "OTHERTAB.BAT",
+    mimeType: "text/plain",
+    buffer: Buffer.from("echo retained\r\nexit"),
+  });
+  const updateButton = page.getByRole("button", { name: "Update ready" });
+  await expect(updateButton).toBeVisible();
+  await Promise.all([
+    page.waitForEvent("load"),
+    page.evaluate(() => {
+      globalThis.document.querySelector("#applyUpdate").click();
+      globalThis.__releaseNewerDuplicateStatus();
+      globalThis.__activateBatflowUpdateFromOtherTab();
+    }),
+  ]);
+
+  await expect(page.locator('[data-file="OTHERTAB.BAT"]')).toBeVisible();
+  await expect(updateButton).toBeHidden();
+});
+
+test("a directly verified matching update avoids a redundant reload", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const complete =
+      sessionStorage.getItem("batflow:test-direct-match") === "complete";
+    sessionStorage.setItem(
+      "batflow:test-direct-match-loads",
+      String(
+        Number(sessionStorage.getItem("batflow:test-direct-match-loads")) + 1,
+      ),
+    );
+    const container = new EventTarget();
+    const registration = new EventTarget();
+    const sendStatus = (source, requestId, shellRevision) => {
+      const event = new Event("message");
+      Object.defineProperties(event, {
+        data: {
+          value: {
+            type: "BATFLOW_STATUS",
+            requestId,
+            cacheReady: true,
+            offline: false,
+            shellRevision,
+          },
+        },
+        source: { value: source },
+      });
+      container.dispatchEvent(event);
+    };
+    const active = {
+      scriptURL: "http://127.0.0.1:41740/service-worker.js",
+      postMessage(message) {
+        if (
+          message.type === "BATFLOW_STATUS_REQUEST" &&
+          !String(message.requestId).endsWith(":active")
+        ) {
+          sendStatus(active, message.requestId, "0.5.4-test-old");
+        }
+      },
+    };
+    const waiting = new EventTarget();
+    waiting.state = "installed";
+    waiting.scriptURL = "http://127.0.0.1:41740/service-worker.js";
+    waiting.postMessage = (message) => {
+      if (message.type !== "BATFLOW_STATUS_REQUEST") return;
+      if (String(message.requestId).startsWith("revision-")) {
+        globalThis.__batflowDirectRevisionRequests += 1;
+        sendStatus(waiting, message.requestId, "0.5.4-dev.33");
+        sessionStorage.setItem("batflow:test-direct-match", "complete");
+        registration.active = waiting;
+        registration.waiting = null;
+        container.controller = waiting;
+        container.dispatchEvent(new Event("controllerchange"));
+      } else if (complete || !String(message.requestId).endsWith(":waiting")) {
+        sendStatus(waiting, message.requestId, "0.5.4-dev.33");
+      }
+    };
+    registration.active = complete ? waiting : active;
+    registration.installing = null;
+    registration.waiting = complete ? null : waiting;
+    registration.update = async () => {};
+    container.controller = registration.active;
+    container.ready = Promise.resolve(registration);
+    container.register = async () => registration;
+    globalThis.__batflowDirectRevisionRequests = 0;
+    Object.defineProperty(globalThis.navigator, "serviceWorker", {
+      configurable: true,
+      value: container,
+    });
+  });
+
+  await page.goto("/");
+  const updateButton = page.getByRole("button", { name: "Update ready" });
+  await expect(updateButton).toBeVisible();
+  await updateButton.click();
+  await expect(page.locator("#appMessage")).toHaveText("Saved · update active");
+  expect(
+    await page.evaluate(() => globalThis.__batflowDirectRevisionRequests),
+  ).toBe(1);
+  expect(
+    await page.evaluate(() =>
+      sessionStorage.getItem("batflow:test-direct-match-loads"),
+    ),
+  ).toBe("1");
+  await expect(updateButton).toBeHidden();
 });
 
 test("a stale waiting-worker status cannot activate its newer replacement", async ({
@@ -2282,7 +2468,7 @@ test("diagnostics track saves across reload and export only redacted context", a
     projectFormat: 2,
     indexedDbSchema: 1,
     interpreterProfile: "msdos-7.1-command.com",
-    offlineShell: "0.5.4-dev.30",
+    offlineShell: "0.5.4-dev.33",
   });
   expect(exported.document.runtime.offlineCache).toBe("ready");
   expect(["persistent", "best-effort", "unsupported", "unknown"]).toContain(

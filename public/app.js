@@ -3,7 +3,7 @@ import {
   norm,
   parseBatch,
   resolveBatchTarget,
-} from "./lib/batch-core.js?v=0.5.4-dev.30";
+} from "./lib/batch-core.js?v=0.5.4-dev.33";
 import {
   INTERPRETER_PROFILE,
   PROJECT_FORMAT_VERSION,
@@ -26,26 +26,26 @@ import {
   updateFileContent,
   updateProjectName,
   updateProjectSimulationScenario,
-} from "./lib/project-format.js?v=0.5.4-dev.30";
+} from "./lib/project-format.js?v=0.5.4-dev.33";
 import {
   DATABASE_VERSION,
   loadCurrentProject,
   saveCurrentProject,
-} from "./lib/storage.js?v=0.5.4-dev.30";
-import { createSaveQueue } from "./lib/save-queue.js?v=0.5.4-dev.30";
+} from "./lib/storage.js?v=0.5.4-dev.33";
+import { createSaveQueue } from "./lib/save-queue.js?v=0.5.4-dev.33";
 import {
   DIAGNOSTICS_FORMAT_VERSION,
   createDiagnosticsDocument,
   createDiagnosticsStore,
-} from "./lib/diagnostics.js?v=0.5.4-dev.30";
+} from "./lib/diagnostics.js?v=0.5.4-dev.33";
 import {
   collectOutcomeRequests,
   simulate,
-} from "./lib/simulation.js?v=0.5.4-dev.30";
+} from "./lib/simulation.js?v=0.5.4-dev.33";
 import {
   SHELL_REVISION,
   ensureStoragePersistence,
-} from "./lib/browser-runtime.js?v=0.5.4-dev.30";
+} from "./lib/browser-runtime.js?v=0.5.4-dev.33";
 
 const $ = (id) => document.getElementById(id);
 const CONNECTIVITY_SESSION_KEY = "batflow:connectivity:offline:v1";
@@ -93,6 +93,7 @@ let observedWaitingWorker = null;
 let observedWaitingRevision = null;
 let updateObservationCounter = 0;
 let updateObservationToken = null;
+const observedWorkerRevisions = new WeakMap();
 let approvedUpdateRevision = null;
 let workerStatusRequestCounter = 0;
 let activeStatusRequestCounter = 0;
@@ -538,6 +539,7 @@ function requestWorkerRevision(worker) {
         reject(new Error("Service-worker revision is unavailable."));
         return;
       }
+      observedWorkerRevisions.set(worker, event.data.shellRevision);
       resolve(event.data.shellRevision);
     };
     globalThis.navigator.serviceWorker.addEventListener(
@@ -617,6 +619,18 @@ function finishUpdateApplication(attempt) {
   $("applyUpdate").disabled = false;
 }
 
+function finishAlreadyActiveUpdate(attempt, worker) {
+  const duplicateRevision = observedWorkerRevisions.get(worker);
+  pendingUpdateWorker = null;
+  $("applyUpdate").classList.add("hidden");
+  finishUpdateApplication(attempt);
+  if (duplicateRevision === SHELL_REVISION) {
+    setMessage("Saved · update active", "success");
+    return;
+  }
+  globalThis.location.reload();
+}
+
 function scheduleUpdateActivationFailure(attempt) {
   updateActivationTimer = globalThis.setTimeout(
     () => reportUpdateActivationFailure(attempt),
@@ -691,6 +705,9 @@ async function registerOfflineShell() {
         typeof event.data.shellRevision === "string"
           ? event.data.shellRevision
           : null;
+      if (observedWaitingRevision !== null) {
+        observedWorkerRevisions.set(event.source, observedWaitingRevision);
+      }
       reconcileDuplicateWaitingWorker();
       return;
     }
@@ -702,6 +719,9 @@ async function registerOfflineShell() {
         typeof event.data.shellRevision === "string"
           ? event.data.shellRevision
           : null;
+      if (observedActiveRevision !== null) {
+        observedWorkerRevisions.set(event.source, observedActiveRevision);
+      }
       reconcileDuplicateWaitingWorker();
       if (requestId !== null) return;
     }
@@ -2411,10 +2431,7 @@ $("applyUpdate").onclick = async () => {
   const currentWaiting = offlineRegistration?.waiting || pendingUpdateWorker;
   if (currentController === worker) {
     if (terminalReloadAttempt === updateAttempt) return;
-    pendingUpdateWorker = null;
-    $("applyUpdate").classList.add("hidden");
-    setMessage("Saved · update active", "success");
-    finishUpdateApplication(updateAttempt);
+    finishAlreadyActiveUpdate(updateAttempt, worker);
     return;
   }
   if (currentWaiting !== worker) {
@@ -2462,10 +2479,7 @@ $("applyUpdate").onclick = async () => {
   const finalWaiting = offlineRegistration?.waiting || pendingUpdateWorker;
   if (finalController === worker) {
     if (terminalReloadAttempt === updateAttempt) return;
-    pendingUpdateWorker = null;
-    $("applyUpdate").classList.add("hidden");
-    setMessage("Saved · update active", "success");
-    finishUpdateApplication(updateAttempt);
+    finishAlreadyActiveUpdate(updateAttempt, worker);
     return;
   }
   if (finalWaiting !== worker) {

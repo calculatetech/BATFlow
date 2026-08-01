@@ -69,7 +69,7 @@ test("the public UI has no private example loader or in-app roadmap", () => {
 
 test("the public HTML references only present runtime assets", () => {
   const html = read("public/index.html");
-  const revision = "0.5.4-dev.30";
+  const revision = "0.5.4-dev.33";
   const revisionPattern = revision.replaceAll(".", "\\.");
   assert.match(html, new RegExp(`href="styles\\.css\\?v=${revisionPattern}"`));
   assert.match(html, new RegExp(`src="app\\.js\\?v=${revisionPattern}"`));
