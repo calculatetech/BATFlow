@@ -62,7 +62,7 @@ test("starts empty, exposes the managed version, and has no serious axe violatio
     "msdos-7.1-command.com",
   );
   await expect(page.locator("#diagnosticsVersions")).toContainText(
-    "0.5.4-dev.33",
+    "0.5.4-dev.36",
   );
   await expect(page.locator("#diagnosticsCacheState")).toContainText("Ready");
   await expect(page.locator("#diagnosticsDurabilityState")).toHaveText(
@@ -130,6 +130,72 @@ test("reloads and saves the current project offline after the shell is cached", 
   await expect(page.locator("#sourceView")).toHaveValue(
     "echo edited offline\nexit",
   );
+});
+
+test("repairs an evicted active shell before the next offline reload", async ({
+  context,
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.locator("#diagnosticsCacheState")).toContainText("Ready");
+  await page.evaluate(async () => {
+    const names = await globalThis.caches.keys();
+    const active = names.find((name) =>
+      name.endsWith(":revision:0.5.4-dev.36"),
+    );
+    if (!active) throw new Error("Active shell cache is missing");
+    const cache = await globalThis.caches.open(active);
+    const app = (await cache.keys()).find((request) =>
+      request.url.includes("/app.js?v=0.5.4-dev.36"),
+    );
+    if (!app) throw new Error("Cached app entry is missing");
+    await cache.delete(app);
+  });
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "BATFlow" })).toBeVisible();
+  expect(
+    await page.evaluate(async () => {
+      const names = await globalThis.caches.keys();
+      const active = names.find((name) =>
+        name.endsWith(":revision:0.5.4-dev.36"),
+      );
+      if (!active) return 0;
+      return (await (await globalThis.caches.open(active)).keys()).length;
+    }),
+  ).toBe(11);
+
+  await page.evaluate(async () => {
+    const names = await globalThis.caches.keys();
+    await Promise.all(
+      names
+        .filter((name) => name.startsWith("batflow-shell-scope:"))
+        .map((name) => globalThis.caches.delete(name)),
+    );
+  });
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "BATFlow" })).toBeVisible();
+  expect(
+    await page.evaluate(async () => {
+      const names = await globalThis.caches.keys();
+      const active = names.find((name) =>
+        name.endsWith(":revision:0.5.4-dev.36"),
+      );
+      if (!active) return 0;
+      return (await (await globalThis.caches.open(active)).keys()).length;
+    }),
+  ).toBe(11);
+
+  await context.addCookies([
+    {
+      name: "batflow-test-offline",
+      value: "1",
+      url: "http://127.0.0.1:41740",
+    },
+  ]);
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "BATFlow" })).toBeVisible();
+  await expect(page.locator("#diagnosticsCacheState")).toContainText("Ready");
+  await context.clearCookies();
 });
 
 test("an obsolete active-worker status cannot restore stale offline state", async ({
@@ -411,7 +477,7 @@ test("an identical waiting registration canonicalizes without another click", as
             requestId,
             cacheReady: true,
             offline: false,
-            shellRevision: "0.5.4-dev.33",
+            shellRevision: "0.5.4-dev.36",
           },
         },
         source: { value: source },
@@ -613,7 +679,7 @@ test("a click racing identical-registration reconciliation does not reactivate",
             requestId,
             cacheReady: true,
             offline: false,
-            shellRevision: "0.5.4-dev.33",
+            shellRevision: "0.5.4-dev.36",
           },
         },
         source: { value: source },
@@ -835,14 +901,14 @@ test("a directly verified matching update avoids a redundant reload", async ({
       if (message.type !== "BATFLOW_STATUS_REQUEST") return;
       if (String(message.requestId).startsWith("revision-")) {
         globalThis.__batflowDirectRevisionRequests += 1;
-        sendStatus(waiting, message.requestId, "0.5.4-dev.33");
+        sendStatus(waiting, message.requestId, "0.5.4-dev.36");
         sessionStorage.setItem("batflow:test-direct-match", "complete");
         registration.active = waiting;
         registration.waiting = null;
         container.controller = waiting;
         container.dispatchEvent(new Event("controllerchange"));
       } else if (complete || !String(message.requestId).endsWith(":waiting")) {
-        sendStatus(waiting, message.requestId, "0.5.4-dev.33");
+        sendStatus(waiting, message.requestId, "0.5.4-dev.36");
       }
     };
     registration.active = complete ? waiting : active;
@@ -2468,7 +2534,7 @@ test("diagnostics track saves across reload and export only redacted context", a
     projectFormat: 2,
     indexedDbSchema: 1,
     interpreterProfile: "msdos-7.1-command.com",
-    offlineShell: "0.5.4-dev.33",
+    offlineShell: "0.5.4-dev.36",
   });
   expect(exported.document.runtime.offlineCache).toBe("ready");
   expect(["persistent", "best-effort", "unsupported", "unknown"]).toContain(

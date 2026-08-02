@@ -1,4 +1,4 @@
-const SHELL_REVISION = "0.5.4-dev.33";
+const SHELL_REVISION = "0.5.4-dev.36";
 const SCOPE_URL = new URL("./", globalThis.location.href);
 const CACHE_PREFIX = `batflow-shell-scope:${encodeURIComponent(
   SCOPE_URL.pathname,
@@ -21,6 +21,57 @@ const SHELL_URLS = [
 const VERSIONED_SHELL_URLS = new Set(
   SHELL_URLS.filter((url) => new URL(url).searchParams.has("v")),
 );
+let shellRecoveryPromise = null;
+
+async function cacheContainsCompleteShell(cache) {
+  const cachedShell = await Promise.all(
+    SHELL_URLS.map((url) => cache.match(url)),
+  );
+  if (!cachedShell.every(Boolean)) return false;
+  return indexMatchesActiveRevision(await cache.match(INDEX_URL));
+}
+
+async function indexMatchesActiveRevision(response) {
+  if (!response?.ok) return false;
+  const indexText = await response.clone().text();
+  return (
+    indexText.includes(`app.js?v=${SHELL_REVISION}`) &&
+    indexText.includes(`styles.css?v=${SHELL_REVISION}`)
+  );
+}
+
+async function repairActiveShell(cache) {
+  const requests = SHELL_URLS.map(
+    (url) =>
+      new Request(url, {
+        cache: "reload",
+        credentials: "same-origin",
+      }),
+  );
+  const networkIndex = await fetch(
+    new Request(INDEX_URL, {
+      cache: "reload",
+      credentials: "same-origin",
+    }),
+  );
+  if (!(await indexMatchesActiveRevision(networkIndex))) return false;
+  await cache.addAll(requests);
+  const cachedIndex = await cache.match(INDEX_URL);
+  if (!(await indexMatchesActiveRevision(cachedIndex))) {
+    await Promise.all(SHELL_URLS.map((url) => cache.delete(url)));
+    return false;
+  }
+  return cacheContainsCompleteShell(cache);
+}
+
+function recoverActiveShell(cache) {
+  if (shellRecoveryPromise === null) {
+    shellRecoveryPromise = repairActiveShell(cache).finally(() => {
+      shellRecoveryPromise = null;
+    });
+  }
+  return shellRecoveryPromise;
+}
 
 globalThis.addEventListener("install", (event) => {
   event.waitUntil(
@@ -68,7 +119,14 @@ globalThis.addEventListener("fetch", (event) => {
       (async () => {
         const cache = await caches.open(CACHE_NAME);
         const cached = await cache.match(INDEX_URL);
-        if (cached) return cached;
+        if (cached && (await cacheContainsCompleteShell(cache))) return cached;
+        try {
+          if (await recoverActiveShell(cache)) {
+            return (await cache.match(INDEX_URL)) || Response.error();
+          }
+        } catch {
+          // An unavailable or mismatched origin must not mix shell revisions.
+        }
         return Response.error();
       })(),
     );
@@ -107,13 +165,18 @@ globalThis.addEventListener("message", (event) => {
           offline = true;
         }
         const cache = await caches.open(CACHE_NAME);
-        const cachedShell = await Promise.all(
-          SHELL_URLS.map((url) => cache.match(url)),
-        );
+        let cacheReady = await cacheContainsCompleteShell(cache);
+        if (!cacheReady && !offline) {
+          try {
+            cacheReady = await recoverActiveShell(cache);
+          } catch {
+            cacheReady = false;
+          }
+        }
         source?.postMessage({
           type: "BATFLOW_STATUS",
           requestId: event.data.requestId,
-          cacheReady: cachedShell.every(Boolean),
+          cacheReady,
           offline,
           shellRevision: SHELL_REVISION,
         });

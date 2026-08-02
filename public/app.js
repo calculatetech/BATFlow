@@ -3,7 +3,7 @@ import {
   norm,
   parseBatch,
   resolveBatchTarget,
-} from "./lib/batch-core.js?v=0.5.4-dev.33";
+} from "./lib/batch-core.js?v=0.5.4-dev.36";
 import {
   INTERPRETER_PROFILE,
   PROJECT_FORMAT_VERSION,
@@ -26,26 +26,26 @@ import {
   updateFileContent,
   updateProjectName,
   updateProjectSimulationScenario,
-} from "./lib/project-format.js?v=0.5.4-dev.33";
+} from "./lib/project-format.js?v=0.5.4-dev.36";
 import {
   DATABASE_VERSION,
   loadCurrentProject,
   saveCurrentProject,
-} from "./lib/storage.js?v=0.5.4-dev.33";
-import { createSaveQueue } from "./lib/save-queue.js?v=0.5.4-dev.33";
+} from "./lib/storage.js?v=0.5.4-dev.36";
+import { createSaveQueue } from "./lib/save-queue.js?v=0.5.4-dev.36";
 import {
   DIAGNOSTICS_FORMAT_VERSION,
   createDiagnosticsDocument,
   createDiagnosticsStore,
-} from "./lib/diagnostics.js?v=0.5.4-dev.33";
+} from "./lib/diagnostics.js?v=0.5.4-dev.36";
 import {
   collectOutcomeRequests,
   simulate,
-} from "./lib/simulation.js?v=0.5.4-dev.33";
+} from "./lib/simulation.js?v=0.5.4-dev.36";
 import {
   SHELL_REVISION,
   ensureStoragePersistence,
-} from "./lib/browser-runtime.js?v=0.5.4-dev.33";
+} from "./lib/browser-runtime.js?v=0.5.4-dev.36";
 
 const $ = (id) => document.getElementById(id);
 const CONNECTIVITY_SESSION_KEY = "batflow:connectivity:offline:v1";
