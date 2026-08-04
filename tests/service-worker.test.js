@@ -43,7 +43,7 @@ function createWorker(scopePath, options = {}) {
         ? response.clone()
         : options.cacheContainsAll
           ? new Response(
-              '<link href="styles.css?v=0.5.4-dev.36"><script src="app.js?v=0.5.4-dev.36"></script>',
+              '<link href="styles.css?v=0.5.4-dev.37"><script src="app.js?v=0.5.4-dev.37"></script>',
             )
           : null;
     },
@@ -116,7 +116,7 @@ test("controlled navigation keeps the active worker's cached entrypoint", async 
       [
         indexUrl,
         new Response(
-          '<link href="styles.css?v=0.5.4-dev.36"><script src="app.js?v=0.5.4-dev.36"></script>',
+          '<link href="styles.css?v=0.5.4-dev.37"><script src="app.js?v=0.5.4-dev.37"></script>',
         ),
       ],
     ]),
@@ -135,10 +135,10 @@ test("controlled navigation keeps the active worker's cached entrypoint", async 
   });
 
   const response = await responsePromise;
-  assert.match(await response.text(), /app\.js\?v=0\.5\.4-dev\.36/);
+  assert.match(await response.text(), /app\.js\?v=0\.5\.4-dev\.37/);
   assert.equal(worker.fetchCount(), 0);
   assert.deepEqual(worker.openedCaches, [
-    "batflow-shell-scope:%2F:revision:0.5.4-dev.36",
+    "batflow-shell-scope:%2F:revision:0.5.4-dev.37",
   ]);
 });
 
@@ -163,7 +163,7 @@ test("controlled navigation fails closed when matching shell recovery is unavail
 });
 
 test("activation deletes only shell caches owned by its scope", async () => {
-  const rootCurrent = "batflow-shell-scope:%2F:revision:0.5.4-dev.36";
+  const rootCurrent = "batflow-shell-scope:%2F:revision:0.5.4-dev.37";
   const rootOld = "batflow-shell-scope:%2F:revision:0.5.4-dev.13";
   const nestedOld = "batflow-shell-scope:%2F-preview%2F:revision:0.5.4-dev.13";
   const worker = createWorker("/", {
@@ -188,7 +188,7 @@ test("versioned shell assets fail closed instead of reading another cache or the
   let responsePromise;
 
   worker.listeners.fetch({
-    request: new Request("https://example.test/app.js?v=0.5.4-dev.36"),
+    request: new Request("https://example.test/app.js?v=0.5.4-dev.37"),
     respondWith(value) {
       responsePromise = value;
     },
@@ -201,7 +201,7 @@ test("versioned shell assets fail closed instead of reading another cache or the
 });
 
 test("versioned shell assets are served from the active worker's own cache", async () => {
-  const assetUrl = "https://example.test/app.js?v=0.5.4-dev.36";
+  const assetUrl = "https://example.test/app.js?v=0.5.4-dev.37";
   const worker = createWorker("/", {
     cachedResponses: new Map([[assetUrl, new Response("active asset")]]),
   });
@@ -232,6 +232,47 @@ test("status verifies the complete active shell cache", async () => {
   assert.equal(completeStatus.cacheReady, true);
 });
 
+test("status falls back to GET when the origin rejects HEAD", async () => {
+  for (const status of [405, 501]) {
+    const worker = createWorker("/", {
+      cacheContainsAll: true,
+      fetchResponse(request) {
+        if (request.method === "HEAD") {
+          return new Response(null, { status });
+        }
+        return new Response("reachable", { status: 200 });
+      },
+    });
+
+    const result = await requestStatus(worker, `head-${status}`);
+    assert.equal(result.offline, false);
+    assert.equal(result.cacheReady, true);
+    assert.equal(worker.fetchCount(), 2);
+  }
+});
+
+test("status remains offline when the GET fallback is unavailable", async () => {
+  for (const getFailure of [503, "reject"]) {
+    const worker = createWorker("/", {
+      cacheContainsAll: true,
+      fetchResponse(request) {
+        if (request.method === "HEAD") {
+          return new Response(null, { status: 405 });
+        }
+        if (getFailure === "reject") {
+          throw new TypeError("Forced GET fallback failure");
+        }
+        return new Response("unavailable", { status: getFailure });
+      },
+    });
+
+    const result = await requestStatus(worker, `get-${getFailure}`);
+    assert.equal(result.offline, true);
+    assert.equal(result.cacheReady, true);
+    assert.equal(worker.fetchCount(), 2);
+  }
+});
+
 test("status safely repairs an evicted shell matching the active revision", async () => {
   const worker = createWorker("/", {
     fetchResponse(request) {
@@ -239,7 +280,7 @@ test("status safely repairs an evicted shell matching the active revision", asyn
       if (request.method === "HEAD") return new Response(null, { status: 200 });
       if (url.pathname === "/" || url.pathname === "/index.html") {
         return new Response(
-          '<link href="styles.css?v=0.5.4-dev.36"><script src="app.js?v=0.5.4-dev.36"></script>',
+          '<link href="styles.css?v=0.5.4-dev.37"><script src="app.js?v=0.5.4-dev.37"></script>',
         );
       }
       return new Response(`asset:${url.pathname}`);
@@ -261,7 +302,7 @@ test("status safely repairs an evicted shell matching the active revision", asyn
     },
   });
   const response = await responsePromise;
-  assert.match(await response.text(), /app\.js\?v=0\.5\.4-dev\.36/);
+  assert.match(await response.text(), /app\.js\?v=0\.5\.4-dev\.37/);
 });
 
 test("missing controlled navigation repairs the matching active shell", async () => {
@@ -270,7 +311,7 @@ test("missing controlled navigation repairs the matching active shell", async ()
       const url = new URL(request.url);
       if (url.pathname === "/" || url.pathname === "/index.html") {
         return new Response(
-          '<link href="styles.css?v=0.5.4-dev.36"><script src="app.js?v=0.5.4-dev.36"></script>',
+          '<link href="styles.css?v=0.5.4-dev.37"><script src="app.js?v=0.5.4-dev.37"></script>',
         );
       }
       return new Response(`asset:${url.pathname}`);
@@ -289,18 +330,18 @@ test("missing controlled navigation repairs the matching active shell", async ()
   });
 
   const response = await responsePromise;
-  assert.match(await response.text(), /app\.js\?v=0\.5\.4-dev\.36/);
+  assert.match(await response.text(), /app\.js\?v=0\.5\.4-dev\.37/);
   assert.equal((await requestStatus(worker)).cacheReady, true);
 });
 
 test("partial controlled-navigation eviction repairs before serving the index", async () => {
   const indexUrl = "https://example.test/index.html";
-  const appUrl = "https://example.test/app.js?v=0.5.4-dev.36";
+  const appUrl = "https://example.test/app.js?v=0.5.4-dev.37";
   const cachedResponses = new Map([
     [
       indexUrl,
       new Response(
-        '<link href="styles.css?v=0.5.4-dev.36"><script src="app.js?v=0.5.4-dev.36"></script>',
+        '<link href="styles.css?v=0.5.4-dev.37"><script src="app.js?v=0.5.4-dev.37"></script>',
       ),
     ],
   ]);
@@ -310,7 +351,7 @@ test("partial controlled-navigation eviction repairs before serving the index", 
       const url = new URL(request.url);
       if (url.pathname === "/" || url.pathname === "/index.html") {
         return new Response(
-          '<link href="styles.css?v=0.5.4-dev.36"><script src="app.js?v=0.5.4-dev.36"></script>',
+          '<link href="styles.css?v=0.5.4-dev.37"><script src="app.js?v=0.5.4-dev.37"></script>',
         );
       }
       return new Response(`asset:${url.pathname}`);
@@ -329,7 +370,7 @@ test("partial controlled-navigation eviction repairs before serving the index", 
   });
 
   const response = await responsePromise;
-  assert.match(await response.text(), /app\.js\?v=0\.5\.4-dev\.36/);
+  assert.match(await response.text(), /app\.js\?v=0\.5\.4-dev\.37/);
   assert.equal(cachedResponses.has(appUrl), true);
   assert.equal((await requestStatus(worker)).cacheReady, true);
 });

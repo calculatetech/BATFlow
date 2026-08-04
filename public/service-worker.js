@@ -1,4 +1,4 @@
-const SHELL_REVISION = "0.5.4-dev.36";
+const SHELL_REVISION = "0.5.4-dev.37";
 const SCOPE_URL = new URL("./", globalThis.location.href);
 const CACHE_PREFIX = `batflow-shell-scope:${encodeURIComponent(
   SCOPE_URL.pathname,
@@ -71,6 +71,26 @@ function recoverActiveShell(cache) {
     });
   }
   return shellRecoveryPromise;
+}
+
+async function originIsReachable() {
+  const probeUrl = new URL(
+    `service-worker.js?connectivity=${Date.now()}`,
+    SCOPE_URL,
+  );
+  try {
+    const response = await fetch(
+      new Request(probeUrl, { cache: "no-store", method: "HEAD" }),
+    );
+    if (response.ok) return true;
+    if (response.status !== 405 && response.status !== 501) return false;
+    const fallback = await fetch(
+      new Request(probeUrl, { cache: "no-store", method: "GET" }),
+    );
+    return fallback.ok;
+  } catch {
+    return false;
+  }
 }
 
 globalThis.addEventListener("install", (event) => {
@@ -149,21 +169,7 @@ globalThis.addEventListener("message", (event) => {
     const source = event.source;
     event.waitUntil(
       (async () => {
-        let offline = false;
-        try {
-          const probe = await fetch(
-            new Request(
-              new URL(
-                `service-worker.js?connectivity=${Date.now()}`,
-                SCOPE_URL,
-              ),
-              { cache: "no-store", method: "HEAD" },
-            ),
-          );
-          if (!probe.ok) throw new Error(`HTTP ${probe.status}`);
-        } catch {
-          offline = true;
-        }
+        const offline = !(await originIsReachable());
         const cache = await caches.open(CACHE_NAME);
         let cacheReady = await cacheContainsCompleteShell(cache);
         if (!cacheReady && !offline) {

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -62,7 +63,7 @@ test("starts empty, exposes the managed version, and has no serious axe violatio
     "msdos-7.1-command.com",
   );
   await expect(page.locator("#diagnosticsVersions")).toContainText(
-    "0.5.4-dev.36",
+    "0.5.4-dev.37",
   );
   await expect(page.locator("#diagnosticsCacheState")).toContainText("Ready");
   await expect(page.locator("#diagnosticsDurabilityState")).toHaveText(
@@ -141,12 +142,12 @@ test("repairs an evicted active shell before the next offline reload", async ({
   await page.evaluate(async () => {
     const names = await globalThis.caches.keys();
     const active = names.find((name) =>
-      name.endsWith(":revision:0.5.4-dev.36"),
+      name.endsWith(":revision:0.5.4-dev.37"),
     );
     if (!active) throw new Error("Active shell cache is missing");
     const cache = await globalThis.caches.open(active);
     const app = (await cache.keys()).find((request) =>
-      request.url.includes("/app.js?v=0.5.4-dev.36"),
+      request.url.includes("/app.js?v=0.5.4-dev.37"),
     );
     if (!app) throw new Error("Cached app entry is missing");
     await cache.delete(app);
@@ -157,7 +158,7 @@ test("repairs an evicted active shell before the next offline reload", async ({
     await page.evaluate(async () => {
       const names = await globalThis.caches.keys();
       const active = names.find((name) =>
-        name.endsWith(":revision:0.5.4-dev.36"),
+        name.endsWith(":revision:0.5.4-dev.37"),
       );
       if (!active) return 0;
       return (await (await globalThis.caches.open(active)).keys()).length;
@@ -178,7 +179,7 @@ test("repairs an evicted active shell before the next offline reload", async ({
     await page.evaluate(async () => {
       const names = await globalThis.caches.keys();
       const active = names.find((name) =>
-        name.endsWith(":revision:0.5.4-dev.36"),
+        name.endsWith(":revision:0.5.4-dev.37"),
       );
       if (!active) return 0;
       return (await (await globalThis.caches.open(active)).keys()).length;
@@ -195,6 +196,44 @@ test("repairs an evicted active shell before the next offline reload", async ({
   await page.reload();
   await expect(page.getByRole("heading", { name: "BATFlow" })).toBeVisible();
   await expect(page.locator("#diagnosticsCacheState")).toContainText("Ready");
+  await context.clearCookies();
+});
+
+test("the real worker falls back to GET when the host rejects HEAD", async ({
+  context,
+  page,
+}, testInfo) => {
+  await page.goto("/");
+  await waitForOfflineShell(page);
+
+  for (const status of [405, 501]) {
+    const token = `${testInfo.project.name}-${status}-${randomUUID()}`;
+    await context.addCookies([
+      {
+        name: "batflow-test-head-probe",
+        value: `${status}:${token}`,
+        url: "http://127.0.0.1:41740",
+      },
+    ]);
+    await page.evaluate(() =>
+      globalThis.navigator.serviceWorker.dispatchEvent(
+        new Event("controllerchange"),
+      ),
+    );
+    await expect
+      .poll(() =>
+        page.evaluate(async (probeToken) => {
+          const response = await fetch(
+            `/__batflow-test/probe-counts?token=${encodeURIComponent(probeToken)}`,
+            { cache: "no-store" },
+          );
+          return response.json();
+        }, token),
+      )
+      .toEqual({ GET: 1, HEAD: 1 });
+    await expect(page.locator("#offlineStatus")).toBeHidden();
+    await expect(page.locator("#diagnosticsCacheState")).toContainText("Ready");
+  }
   await context.clearCookies();
 });
 
@@ -303,6 +342,9 @@ test("status detects an incomplete shell and update failures confirm origin reac
     globalThis.__batflowHoldWorkerStatus = true;
     globalThis.__batflowWorkerStatuses = [];
     globalThis.__batflowTestOriginFailure = false;
+    globalThis.__batflowConnectivityHeadStatus = null;
+    globalThis.__batflowConnectivityGetFailure = null;
+    globalThis.__batflowConnectivityProbeMethods = [];
     globalThis.__batflowHoldOriginProbes = false;
     globalThis.__batflowOriginProbes = [];
     globalThis.__refreshBatflowWorkerStatus = () =>
@@ -323,6 +365,35 @@ test("status detects an incomplete shell and update failures confirm origin reac
     };
     globalThis.fetch = (input, options) => {
       const url = typeof input === "string" ? input : input.url;
+      const method = options?.method || input?.method || "GET";
+      if (String(url).includes("connectivity=")) {
+        globalThis.__batflowConnectivityProbeMethods.push(method);
+      }
+      if (
+        globalThis.__batflowConnectivityHeadStatus !== null &&
+        method === "HEAD" &&
+        String(url).includes("connectivity=")
+      ) {
+        return Promise.resolve(
+          new Response(null, {
+            status: globalThis.__batflowConnectivityHeadStatus,
+          }),
+        );
+      }
+      if (
+        globalThis.__batflowConnectivityGetFailure !== null &&
+        method === "GET" &&
+        String(url).includes("connectivity=")
+      ) {
+        if (globalThis.__batflowConnectivityGetFailure === "reject") {
+          return Promise.reject(new TypeError("Forced GET fallback failure"));
+        }
+        return Promise.resolve(
+          new Response("unavailable", {
+            status: globalThis.__batflowConnectivityGetFailure,
+          }),
+        );
+      }
       if (
         globalThis.__batflowHoldOriginProbes &&
         String(url).includes("connectivity=")
@@ -383,6 +454,43 @@ test("status detects an incomplete shell and update failures confirm origin reac
     globalThis.__batflowTestOriginFailure = false;
   });
   await expect(page.locator("#offlineStatus")).toBeHidden();
+
+  for (const headStatus of [405, 501]) {
+    const initialCount = await page.evaluate(
+      () => globalThis.__batflowConnectivityProbeMethods.length,
+    );
+    await page.evaluate((status) => {
+      globalThis.__batflowConnectivityHeadStatus = status;
+      globalThis.dispatchEvent(new Event("online"));
+    }, headStatus);
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => globalThis.__batflowConnectivityProbeMethods.length,
+        ),
+      )
+      .toBe(initialCount + 2);
+    expect(
+      await page.evaluate(() =>
+        globalThis.__batflowConnectivityProbeMethods.slice(-2),
+      ),
+    ).toEqual(["HEAD", "GET"]);
+    await expect(page.locator("#offlineStatus")).toBeHidden();
+  }
+
+  for (const getFailure of [503, "reject"]) {
+    await page.evaluate((failure) => {
+      globalThis.__batflowConnectivityHeadStatus = 405;
+      globalThis.__batflowConnectivityGetFailure = failure;
+      globalThis.dispatchEvent(new Event("online"));
+    }, getFailure);
+    await expect(page.locator("#offlineStatus")).toBeVisible();
+    await page.evaluate(() => {
+      globalThis.__batflowConnectivityHeadStatus = null;
+      globalThis.__batflowConnectivityGetFailure = null;
+    });
+    await expect(page.locator("#offlineStatus")).toBeHidden();
+  }
 
   await page.evaluate(() => {
     globalThis.__batflowHoldOriginProbes = true;
@@ -477,7 +585,7 @@ test("an identical waiting registration canonicalizes without another click", as
             requestId,
             cacheReady: true,
             offline: false,
-            shellRevision: "0.5.4-dev.36",
+            shellRevision: "0.5.4-dev.37",
           },
         },
         source: { value: source },
@@ -679,7 +787,7 @@ test("a click racing identical-registration reconciliation does not reactivate",
             requestId,
             cacheReady: true,
             offline: false,
-            shellRevision: "0.5.4-dev.36",
+            shellRevision: "0.5.4-dev.37",
           },
         },
         source: { value: source },
@@ -901,14 +1009,14 @@ test("a directly verified matching update avoids a redundant reload", async ({
       if (message.type !== "BATFLOW_STATUS_REQUEST") return;
       if (String(message.requestId).startsWith("revision-")) {
         globalThis.__batflowDirectRevisionRequests += 1;
-        sendStatus(waiting, message.requestId, "0.5.4-dev.36");
+        sendStatus(waiting, message.requestId, "0.5.4-dev.37");
         sessionStorage.setItem("batflow:test-direct-match", "complete");
         registration.active = waiting;
         registration.waiting = null;
         container.controller = waiting;
         container.dispatchEvent(new Event("controllerchange"));
       } else if (complete || !String(message.requestId).endsWith(":waiting")) {
-        sendStatus(waiting, message.requestId, "0.5.4-dev.36");
+        sendStatus(waiting, message.requestId, "0.5.4-dev.37");
       }
     };
     registration.active = complete ? waiting : active;
@@ -2534,7 +2642,7 @@ test("diagnostics track saves across reload and export only redacted context", a
     projectFormat: 2,
     indexedDbSchema: 1,
     interpreterProfile: "msdos-7.1-command.com",
-    offlineShell: "0.5.4-dev.36",
+    offlineShell: "0.5.4-dev.37",
   });
   expect(exported.document.runtime.offlineCache).toBe("ready");
   expect(["persistent", "best-effort", "unsupported", "unknown"]).toContain(

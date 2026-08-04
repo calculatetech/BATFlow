@@ -3,7 +3,7 @@ import {
   norm,
   parseBatch,
   resolveBatchTarget,
-} from "./lib/batch-core.js?v=0.5.4-dev.36";
+} from "./lib/batch-core.js?v=0.5.4-dev.37";
 import {
   INTERPRETER_PROFILE,
   PROJECT_FORMAT_VERSION,
@@ -26,26 +26,26 @@ import {
   updateFileContent,
   updateProjectName,
   updateProjectSimulationScenario,
-} from "./lib/project-format.js?v=0.5.4-dev.36";
+} from "./lib/project-format.js?v=0.5.4-dev.37";
 import {
   DATABASE_VERSION,
   loadCurrentProject,
   saveCurrentProject,
-} from "./lib/storage.js?v=0.5.4-dev.36";
-import { createSaveQueue } from "./lib/save-queue.js?v=0.5.4-dev.36";
+} from "./lib/storage.js?v=0.5.4-dev.37";
+import { createSaveQueue } from "./lib/save-queue.js?v=0.5.4-dev.37";
 import {
   DIAGNOSTICS_FORMAT_VERSION,
   createDiagnosticsDocument,
   createDiagnosticsStore,
-} from "./lib/diagnostics.js?v=0.5.4-dev.36";
+} from "./lib/diagnostics.js?v=0.5.4-dev.37";
 import {
   collectOutcomeRequests,
   simulate,
-} from "./lib/simulation.js?v=0.5.4-dev.36";
+} from "./lib/simulation.js?v=0.5.4-dev.37";
 import {
   SHELL_REVISION,
   ensureStoragePersistence,
-} from "./lib/browser-runtime.js?v=0.5.4-dev.36";
+} from "./lib/browser-runtime.js?v=0.5.4-dev.37";
 
 const $ = (id) => document.getElementById(id);
 const CONNECTIVITY_SESSION_KEY = "batflow:connectivity:offline:v1";
@@ -275,14 +275,18 @@ function renderConnectivity() {
 
 async function originIsReachable() {
   try {
-    const response = await fetch(
-      `./service-worker.js?connectivity=${Date.now()}`,
-      {
-        cache: "no-store",
-        method: "HEAD",
-      },
-    );
-    return response.ok;
+    const probeUrl = `./service-worker.js?connectivity=${Date.now()}`;
+    const response = await fetch(probeUrl, {
+      cache: "no-store",
+      method: "HEAD",
+    });
+    if (response.ok) return true;
+    if (response.status !== 405 && response.status !== 501) return false;
+    const fallback = await fetch(probeUrl, {
+      cache: "no-store",
+      method: "GET",
+    });
+    return fallback.ok;
   } catch {
     return false;
   }
