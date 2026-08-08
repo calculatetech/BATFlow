@@ -110,3 +110,79 @@ test("renders 2,000 lines within the desktop budget", async ({ page }) => {
     expect(duration).toBeLessThan(1000);
   }
 });
+
+test("reports and clears a confirmed infinite loop", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/");
+  await page.locator("#fileInput").setInputFiles({
+    name: "AUTOEXEC.BAT",
+    mimeType: "text/plain",
+    buffer: Buffer.from(":again\r\necho once\r\ngoto again\r\n"),
+  });
+
+  const warningNode = page.locator(".flow-node.infinite-loop");
+  await expect(warningNode).toBeVisible();
+  await expect(warningNode).toContainText("Infinite loop");
+  await page.addScriptTag({ path: axePath });
+  const violations = await page.evaluate(async () => {
+    const result = await globalThis.axe.run(
+      globalThis.document.querySelector(".flow-node.infinite-loop"),
+      {
+        runOnly: ["wcag2a", "wcag2aa"],
+      },
+    );
+    return result.violations.filter((item) =>
+      ["serious", "critical"].includes(item.impact),
+    );
+  });
+  expect(violations).toEqual([]);
+  if (testInfo.project.name === "firefox") {
+    await expect(page).toHaveScreenshot("infinite-loop-warning.png", {
+      animations: "disabled",
+      maxDiffPixelRatio: 0.01,
+    });
+  }
+
+  await page.getByRole("button", { name: "Executed code" }).click();
+  await expect(page.locator(".infinite-loop-warning")).toContainText(
+    "Infinite loop detected. Simulation stopped after one cycle.",
+  );
+  await expect(
+    page.locator(".executed-code tr").filter({ hasText: "echo once" }),
+  ).toHaveCount(1);
+
+  await page.getByRole("button", { name: "Source", exact: true }).click();
+  await page.locator("#sourceEditor").fill("echo done\n");
+  await page.getByRole("button", { name: "Flow", exact: true }).click();
+  await expect(page.locator(".flow-node.infinite-loop")).toHaveCount(0);
+  await page.getByRole("button", { name: "Executed code" }).click();
+  await expect(page.locator(".infinite-loop-warning")).toHaveCount(0);
+});
+
+test("shows a warning when a cycle executes no source rows", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.locator("#fileInput").setInputFiles([
+    {
+      name: "AUTOEXEC.BAT",
+      mimeType: "text/plain",
+      buffer: Buffer.from(""),
+    },
+    {
+      name: "CONFIG.SYS",
+      mimeType: "text/plain",
+      buffer: Buffer.from(
+        "[menu]\r\nsubmenu=other,Other\r\n[other]\r\nsubmenu=menu,Back\r\n",
+      ),
+    },
+  ]);
+
+  await expect(page.locator(".flow-node.infinite-loop")).toBeVisible();
+  await page.getByRole("button", { name: "Executed code" }).click();
+  await expect(page.locator(".infinite-loop-warning")).toContainText(
+    "Infinite loop detected. Simulation stopped after one cycle.",
+  );
+  await expect(page.getByText("No execution yet")).toHaveCount(0);
+});

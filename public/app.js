@@ -133,7 +133,7 @@ function updateSimulation() {
 
 function renderExecuted() {
   const rows = state.run?.executed || [];
-  if (!rows.length) {
+  if (!rows.length && !state.run?.warning) {
     $("executedView").innerHTML =
       '<div class="placeholder"><strong>No execution yet</strong><span>Open a batch program to simulate it.</span></div>';
     return;
@@ -150,6 +150,16 @@ function renderExecuted() {
     location.textContent = `${row.file}:${row.line}`;
     source.textContent = row.source;
     tr.append(location, source);
+    body.append(tr);
+  }
+  if (state.run.warning) {
+    const tr = document.createElement("tr");
+    const location = document.createElement("td");
+    const message = document.createElement("td");
+    tr.className = "infinite-loop-warning";
+    location.textContent = `${state.run.warning.file}:${state.run.warning.line}`;
+    message.textContent = `Warning: ${state.run.warning.message}`;
+    tr.append(location, message);
     body.append(tr);
   }
   table.append(body);
