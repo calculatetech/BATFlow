@@ -21,6 +21,13 @@ const state = {
 };
 let rebuildTimer;
 
+function measured(name, action) {
+  const start = performance.now();
+  const result = action();
+  performance.measure(name, { start, end: performance.now() });
+  return result;
+}
+
 function setMessage(message, kind = "") {
   $("message").textContent = message;
   $("message").className = `message ${kind}`;
@@ -93,8 +100,16 @@ function renderSource() {
 }
 
 function rebuildProgram() {
-  state.program = buildProgram(state.files, state.entry);
-  state.run = simulate(state.program, state.scenario);
+  state.program = measured("batflow:program", () =>
+    buildProgram(state.files, state.entry),
+  );
+  state.run = measured("batflow:simulate", () =>
+    simulate(state.program, state.scenario),
+  );
+  const issues = state.program.diagnostics.length;
+  $("diagnosticCount").textContent =
+    `${issues} issue${issues === 1 ? "" : "s"}`;
+  $("diagnosticCount").classList.toggle("warning", issues > 0);
   state.revision += 1;
   if (state.view === "flow") renderFlow();
 }
@@ -109,7 +124,9 @@ function renderFlow() {
 }
 
 function updateSimulation() {
-  state.run = simulate(state.program, state.scenario);
+  state.run = measured("batflow:simulate", () =>
+    simulate(state.program, state.scenario),
+  );
   applySimulation($("flowView"), state.run);
   renderExecuted();
 }

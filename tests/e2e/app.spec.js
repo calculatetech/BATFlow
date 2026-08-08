@@ -5,9 +5,9 @@ import { expect, test } from "@playwright/test";
 const require = createRequire(import.meta.url);
 const axePath = require.resolve("axe-core/axe.min.js");
 
-test("loads, edits, switches views, and exposes fixed session actions", async ({
+test("loads, simulates, edits, and keeps actions fixed", async ({
   page,
-}) => {
+}, testInfo) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "BATFlow" })).toBeVisible();
   await expect(page.getByText("0.6.0 development")).toBeVisible();
@@ -33,6 +33,22 @@ test("loads, edits, switches views, and exposes fixed session actions", async ({
   await expect(page.locator("#currentPath")).toContainText("entry");
   await expect(page.locator(".flow-node")).not.toHaveCount(0);
   await expect(page.getByRole("button", { name: "Fit graph" })).toBeVisible();
+  await page.addScriptTag({ path: axePath });
+  const graphViolations = await page.evaluate(async () => {
+    const result = await globalThis.axe.run(globalThis.document, {
+      runOnly: ["wcag2a", "wcag2aa"],
+    });
+    return result.violations.filter((item) =>
+      ["serious", "critical"].includes(item.impact),
+    );
+  });
+  expect(graphViolations).toEqual([]);
+  if (testInfo.project.name === "firefox") {
+    await expect(page).toHaveScreenshot("flow.png", {
+      animations: "disabled",
+      maxDiffPixelRatio: 0.01,
+    });
+  }
   await page.locator(".flow-node.decision select").selectOption("yes");
   await page.getByRole("button", { name: "Executed code" }).click();
   await expect(page.locator(".executed-code")).toContainText("echo Network");
@@ -47,7 +63,6 @@ test("loads, edits, switches views, and exposes fixed session actions", async ({
   const actions = await page.locator(".session-actions").boundingBox();
   expect(actions.y + actions.height).toBeLessThanOrEqual(pane.y + pane.height);
 
-  await page.addScriptTag({ path: axePath });
   const violations = await page.evaluate(async () => {
     const result = await globalThis.axe.run(globalThis.document, {
       runOnly: ["wcag2a", "wcag2aa"],
@@ -57,4 +72,41 @@ test("loads, edits, switches views, and exposes fixed session actions", async ({
     );
   });
   expect(violations).toEqual([]);
+});
+
+test("renders 2,000 lines within the desktop budget", async ({ page }) => {
+  await page.goto("/");
+  const source = Array.from(
+    { length: 2000 },
+    (_, index) => `echo line ${index + 1}`,
+  ).join("\r\n");
+  const start = await page.evaluate(() => performance.now());
+  await page.locator("#fileInput").setInputFiles({
+    name: "AUTOEXEC.BAT",
+    mimeType: "text/plain",
+    buffer: Buffer.from(source),
+  });
+  await expect(page.locator(".flow-node.process")).toBeVisible();
+  const elapsed = await page.evaluate(
+    (value) => performance.now() - value,
+    start,
+  );
+  expect(elapsed).toBeLessThan(2000);
+  const measures = await page.evaluate(() =>
+    Object.fromEntries(
+      [
+        "batflow:program",
+        "batflow:layout",
+        "batflow:render",
+        "batflow:simulate",
+      ].map((name) => [
+        name,
+        performance.getEntriesByName(name).at(-1)?.duration,
+      ]),
+    ),
+  );
+  for (const duration of Object.values(measures)) {
+    expect(duration).toBeGreaterThanOrEqual(0);
+    expect(duration).toBeLessThan(1000);
+  }
 });

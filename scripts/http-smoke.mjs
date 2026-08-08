@@ -70,7 +70,16 @@ try {
 
   await request("/app.js", 200);
   await request("/styles.css", 200);
-  await request("/lib/source.js", 200);
+  for (const file of [
+    "source",
+    "batch",
+    "config",
+    "flow",
+    "graph",
+    "simulate",
+  ]) {
+    await request(`/lib/${file}.js`, 200);
+  }
   await request("/service-worker.js", 404);
   await request("/.git/config", 404);
   await request("/docs/private/AUTOEXEC.BAT", 404);
