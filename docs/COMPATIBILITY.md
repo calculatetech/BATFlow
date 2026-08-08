@@ -1,39 +1,19 @@
-# Compatibility
+# Compatibility boundary
 
-## Interpreter boundary
+BATFlow targets the control-flow behavior of MS-DOS 7.1 `COMMAND.COM` and the
+multiple-configuration menu system introduced by MS-DOS 6.
 
-BATFlow 0.5.3 models the Win98 MS-DOS 7.1 `COMMAND.COM` profile. Simulation is
-an explanatory control-flow model; it does not execute imported commands and
-is not a byte-for-byte interpreter.
+The 0.6.0 model includes labels and GOTO, all DOS IF forms, FOR, SET, CALL,
+direct batch transfer, `%0` through `%9`, SHIFT, EXIT, COMMAND `/C`, CHOICE,
+pipelines, flow-relevant ERRORLEVEL, CONFIG.SYS menu directives, nested
+SUBMENU, ordered COMMON blocks, INCLUDE, and `%CONFIG%` handoff to
+AUTOEXEC.BAT. Unknown external programs remain opaque and are never run.
 
-The 0.5.3 trace is intentionally single-file. `CALL` is recorded and returns to
-the following line; direct batch invocation records a transfer and stops.
-Cross-file trace expansion remains planned for 0.6.0.
+Files must be valid UTF-8. Uniform CRLF, LF, or CR line endings are preserved
+when downloading the selected file. Mixed endings are normalized to CRLF with
+a warning. DOS paths compare case-insensitively.
 
-## Input boundary
-
-- Supported source imports: `.bat`, `.sys`, and `.txt`.
-- Supported project import/export: UTF-8 `.batflow`, format version 2 with
-  migration from version 1.
-- Supported source encoding: UTF-8 with or without a byte-order mark.
-- Preserved line endings: CRLF, LF, or CR. Mixed endings normalize on edit.
-- Relative project paths and folder import are supported. User-entered rename
-  paths require DOS 8.3 components; safe noncompliant imported paths are
-  preserved with warnings.
-- Unsupported: `.cmd`, binary data, guessed OEM/DOS code pages, absolute
-  project paths, and parent-directory traversal.
-
-## Storage and the former `passes` name
-
-The current IndexedDB database has the stable name `batflow` and schema version
-
-1. On an empty current database, BATFlow performs best-effort recovery from
-   the known legacy database names `batflow-v1`, `passes`, and `passes-v1`.
-   Recovered data is copied into the current versioned store; legacy databases
-   are retained so migration is reversible.
-
-No distributable historical `passes` artifact was available during
-stabilization, so compatibility cannot be claimed for unknown store names,
-origins, schemas, or file extensions. Browser storage is origin-scoped: moving
-the app to a new origin cannot automatically access data from the old origin.
-Export a project from the old deployment where possible before moving.
+BATFlow supports current desktop Firefox and Chromium. It requires an HTTP(S)
+static host and deliberately provides no service worker or offline guarantee.
+Mobile layouts, legacy DOS code pages, NT `cmd.exe` extensions, and arbitrary
+filesystem access are outside the 0.6.0 boundary.

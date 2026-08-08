@@ -8,14 +8,11 @@ import { fileURLToPath } from "node:url";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (path) => readFileSync(join(root, path), "utf8");
 
-test("the managed product version is consistently declared", () => {
+test("the managed baseline and rebuild target are declared", () => {
   const manifest = JSON.parse(read("package.json"));
   assert.equal(manifest.version, "0.5.3");
   assert.match(read("README.md"), /development baseline is `0\.5\.3`/);
-  assert.match(
-    read("docs/ROADMAP.md"),
-    /Current baseline: \*\*0\.5\.3 development\*\*/,
-  );
+  assert.match(read("docs/ROADMAP.md"), /BATFlow 0\.6\.0 rebuild roadmap/);
 });
 
 test("private inputs and generated results are excluded from Git", () => {
@@ -90,32 +87,16 @@ test("the public HTML references only present runtime assets", () => {
 
 test("the human-facing roadmap records the delivery and result policies", () => {
   const roadmap = read("docs/ROADMAP.md");
-  assert.match(
-    roadmap,
-    /All work is performed in a branch or dedicated worktree/,
-  );
-  assert.match(roadmap, /reaches\s+`main` only after required CI succeeds/);
-  assert.match(
-    roadmap,
-    /pull-request comments and review\s+threads are inspected, actionable feedback is addressed, and every thread is\s+resolved/,
-  );
-  assert.match(roadmap, /\.agent\/test-results\//);
-  assert.match(
-    roadmap,
-    /Code changes and major rework receive challenged adversarial review/,
-  );
-  assert.match(
-    read("docs/HUMAN_TESTING.md"),
-    /Simple documentation and progress-only updates are exempt/,
-  );
-  assert.match(
-    read("docs/HUMAN_TESTING.md"),
-    /all pull-request comments and review\s+threads are addressed and resolved/,
-  );
-  assert.match(
-    roadmap,
-    /Formal Git tags and GitHub releases begin at `1\.0\.0`/,
-  );
+  for (const task of Array.from(
+    { length: 8 },
+    (_, index) => `BF-${String(index + 1).padStart(3, "0")}`,
+  )) {
+    assert.match(roadmap, new RegExp(task));
+  }
+  assert.match(roadmap, /one .*outcome per pull request/i);
+  assert.match(roadmap, /required `verify` check/i);
+  assert.match(roadmap, /Resolve every review thread before merge/);
+  assert.match(roadmap, /final integration pull request\s+targets `main`/);
 });
 
 test("pre-1.0 CI validates builds without publishing review artifacts", () => {
