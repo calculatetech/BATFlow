@@ -247,6 +247,7 @@ export function applySimulation(root, run) {
 }
 
 export function mountGraph(root, program, scenario = {}, onChange = () => {}) {
+  const renderStart = performance.now();
   root.replaceChildren();
   if (!program.entryId || !program.nodes.length) {
     const empty = element("div", "placeholder");
@@ -258,7 +259,12 @@ export function mountGraph(root, program, scenario = {}, onChange = () => {}) {
     return;
   }
 
+  const layoutStart = performance.now();
   const layout = layoutGraph(program);
+  performance.measure("batflow:layout", {
+    start: layoutStart,
+    end: performance.now(),
+  });
   const viewport = element("div", "graph-viewport");
   const scene = element("div", "graph-scene");
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -374,5 +380,9 @@ export function mountGraph(root, program, scenario = {}, onChange = () => {}) {
     { passive: false },
   );
   root.append(viewport, controls);
+  performance.measure("batflow:render", {
+    start: renderStart,
+    end: performance.now(),
+  });
   requestAnimationFrame(() => fit(0.75));
 }

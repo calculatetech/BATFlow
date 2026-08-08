@@ -239,6 +239,16 @@ button:disabled {
   font-variant-numeric: tabular-nums;
 }
 
+.workspace-status {
+  display: flex;
+  gap: 18px;
+  color: var(--muted);
+}
+
+#diagnosticCount.warning {
+  color: var(--warning);
+}
+
 .view {
   position: relative;
   min-width: 0;
