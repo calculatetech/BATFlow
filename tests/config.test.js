@@ -134,3 +134,24 @@ test("the program links CONFIG to AUTOEXEC and only reachable called files", () 
   assert.ok(program.edges.some((item) => item.role === "call"));
   assert.ok(program.edges.some((item) => item.role === "return"));
 });
+
+test("an explicitly selected non-AUTOEXEC entry bypasses the boot pair", () => {
+  const sources = new Map([
+    [
+      "config.sys",
+      source(
+        "CONFIG.SYS",
+        "[menu]\nmenuitem=normal,Normal\n[normal]\ndos=high",
+      ),
+    ],
+    ["autoexec.bat", source("AUTOEXEC.BAT", "echo boot")],
+    ["tools.bat", source("TOOLS.BAT", "echo tools")],
+  ]);
+  const program = buildProgram(sources, "tools.bat");
+
+  assert.equal(program.entryId, "start:tools.bat");
+  assert.equal(
+    program.nodes.some((node) => node.kind === "menu"),
+    false,
+  );
+});
