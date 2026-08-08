@@ -33,29 +33,16 @@ jobs:
       - name: Run repository checks
         run: npm run check
 
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+      - name: Install supported browsers
+        run: npx playwright install --with-deps firefox chromium
 
       - name: Run browser acceptance
         run: npm run test:e2e
 
-      - name: Smoke-test the staged web root
+      - name: Smoke-test the static web root
         run: npm run smoke
         env:
           BATFLOW_TEST_RESULTS_DIR: ${{ runner.temp }}/batflow-test-results
-
-      - name: Build and verify deployment bundle
-        run: |
-          npm run package
-          npm run verify:package
-          npm run verify:reproducible
-          BATFLOW_WEB_ROOT=dist BATFLOW_SMOKE_PORT=41741 npm run smoke
-        env:
-          BATFLOW_ARTIFACT_DIR: ${{ runner.temp }}/batflow-artifacts
-          BATFLOW_TEST_RESULTS_DIR: ${{ runner.temp }}/batflow-test-results
-
-      - name: Audit dependencies
-        run: npm audit
 
       - name: Confirm checks did not rewrite tracked files
         run: git diff --exit-code

@@ -3,362 +3,93 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>BATFlow — DOS 7.1 Visual Batch Editor</title>
-    <script>
-      (() => {
-        const early = {
-          events: [],
-          startupComplete: false,
-        };
-        globalThis.__batflowEarlyDiagnostics = early;
-
-        const detailFor = (event) => {
-          if (event.target && event.target !== globalThis) {
-            return `${event.target.tagName || "Resource"}: ${
-              event.target.src || event.target.href || "unknown"
-            }`;
-          }
-          return [event.message, event.filename]
-            .filter(Boolean)
-            .join("\n")
-            .slice(0, 4096);
-        };
-        const queue = (code, detail) => {
-          if (early.startupComplete) return;
-          early.events.push({
-            code,
-            detail: String(detail || "").slice(0, 4096),
-          });
-          early.events = early.events.slice(-100);
-        };
-        const summaries = {
-          "runtime.asset.failed":
-            "A required application asset failed to load.",
-          "runtime.error": "An unexpected startup error occurred.",
-          "runtime.rejection":
-            "An unexpected asynchronous startup error occurred.",
-        };
-
-        const renderFallback = () => {
-          const overall = document.getElementById("diagnosticsOverall");
-          const heading = document.createElement("strong");
-          const explanation = document.createElement("span");
-          heading.textContent = "Error";
-          explanation.textContent =
-            "BATFlow could not start. Review the captured startup failures below.";
-          overall.replaceChildren(heading, explanation);
-
-          const events = document.getElementById("diagnosticsEvents");
-          const articles = [...early.events].reverse().map((event) => {
-            const code = Object.hasOwn(summaries, event.code)
-              ? event.code
-              : "runtime.error";
-            const article = document.createElement("article");
-            const summary = document.createElement("strong");
-            const codeElement = document.createElement("code");
-            article.className = "diagnostic-event error";
-            summary.textContent = summaries[code];
-            codeElement.textContent = code;
-            article.append(summary, codeElement);
-            if (event.detail) {
-              const details = document.createElement("details");
-              const detailsSummary = document.createElement("summary");
-              const detail = document.createElement("pre");
-              details.open = true;
-              detailsSummary.textContent = "Technical details";
-              detail.textContent = event.detail;
-              details.append(detailsSummary, detail);
-              article.append(details);
-            }
-            return article;
-          });
-          events.replaceChildren(...articles);
-        };
-
-        globalThis.addEventListener(
-          "error",
-          (event) => {
-            queue(
-              event.target && event.target !== globalThis
-                ? "runtime.asset.failed"
-                : "runtime.error",
-              detailFor(event),
-            );
-          },
-          true,
-        );
-        globalThis.addEventListener("unhandledrejection", (event) => {
-          queue(
-            "runtime.rejection",
-            event.reason?.message || String(event.reason || ""),
-          );
-        });
-
-        globalThis.addEventListener("DOMContentLoaded", () => {
-          if (early.startupComplete || early.events.length === 0) return;
-          const button = document.getElementById("openDiagnostics");
-          const badge = document.getElementById("diagnosticsBadge");
-          button.className = "diagnostics-button error";
-          button.setAttribute("aria-label", "Diagnostics: Error");
-          badge.textContent = "Error";
-          button.addEventListener("click", () => {
-            if (early.startupComplete) return;
-            renderFallback();
-            document.getElementById("clearDiagnostics").disabled = true;
-            document.getElementById("exportDiagnostics").disabled = true;
-            document.getElementById("diagnosticsDialog").showModal();
-          });
-          document
-            .getElementById("closeDiagnostics")
-            .addEventListener("click", () =>
-              document.getElementById("diagnosticsDialog").close(),
-            );
-        });
-      })();
-    </script>
-    <link rel="stylesheet" href="styles.css?v=0.5.3-dev" />
+    <meta name="color-scheme" content="dark" />
+    <title>BATFlow — MS-DOS Logic Visualizer</title>
+    <link rel="stylesheet" href="styles.css?v=0.6.0" />
   </head>
   <body>
-    <header class="topbar">
-      <div>
+    <aside class="command-pane" aria-label="BATFlow controls">
+      <header class="brand">
         <h1>BATFlow</h1>
-        <span>Win98 MS-DOS 7.1 visual batch editor · v0.5.3 · development</span>
+        <span>MS-DOS logic visualizer</span>
+      </header>
+
+      <nav class="view-switcher" aria-label="Workspace view">
+        <button class="active" data-view="flow" type="button">Flow</button>
+        <button data-view="source" type="button">Source</button>
+        <button data-view="executed" type="button">Executed code</button>
+      </nav>
+
+      <section class="files-panel" aria-labelledby="filesTitle">
+        <div class="section-heading">
+          <h2 id="filesTitle">Files</h2>
+          <span id="fileCount">0</span>
+        </div>
+        <div id="fileList" class="file-list">
+          <p class="empty-state">Open BAT and CONFIG.SYS files to begin.</p>
+        </div>
+      </section>
+
+      <div id="message" class="message" role="status" aria-live="polite">
+        Ready
       </div>
-      <div class="toolbar">
-        <button
-          id="openDiagnostics"
-          class="diagnostics-button healthy"
-          type="button"
-          aria-label="Diagnostics: Healthy"
-        >
-          Diagnostics
-          <span id="diagnosticsBadge" aria-live="polite">Healthy</span>
+
+      <div class="session-actions">
+        <div class="action-row">
+          <button id="openFiles" type="button">Open files</button>
+          <button id="openFolder" type="button">Open folder</button>
+        </div>
+        <div class="action-row">
+          <button id="setEntry" type="button" disabled>Set entry</button>
+          <button id="downloadCurrent" type="button" disabled>Download</button>
+        </div>
+        <button id="resetSession" class="wide" type="button" disabled>
+          Reset session
         </button>
-        <button id="newProject" type="button">New project</button>
-        <button id="openImport" type="button">Import</button>
-        <button id="exportProject" type="button">Export project</button>
-        <button id="exportBat" type="button">Export current BAT</button>
       </div>
-    </header>
+    </aside>
 
     <main class="workspace">
-      <aside class="sidebar left" aria-label="Project and simulation">
-        <section>
-          <h2>Project</h2>
-          <label for="projectName">Project name</label>
-          <input id="projectName" type="text" />
-        </section>
-        <section>
-          <h2>Project files</h2>
-          <div id="fileList" class="file-list"></div>
-          <div class="file-actions button-row">
-            <button id="renameFile" type="button" disabled>Rename</button>
-            <button id="deleteFile" type="button" disabled>Delete</button>
-            <button id="setEntryFile" type="button" disabled>
-              Set as entry
-            </button>
-          </div>
-        </section>
-        <section class="simulation-panel">
-          <h2>Simulation</h2>
-          <div id="simulationInputs" class="simulation-inputs"></div>
-          <div class="simulation-actions">
-            <div class="button-row">
-              <button
-                id="traceToggle"
-                class="toggle-button"
-                type="button"
-                aria-pressed="true"
-              >
-                Trace: On
-              </button>
-              <button id="resetSimulation" type="button" disabled>
-                Reset inputs
-              </button>
-            </div>
-            <div id="traceSummary" class="trace-summary"></div>
-          </div>
-        </section>
-        <section>
-          <h2>Labels</h2>
-          <div id="labelList" class="label-list"></div>
-        </section>
-      </aside>
-
-      <section class="editor-pane">
-        <div class="tabs" role="tablist" aria-label="Editor view">
-          <button
-            role="tab"
-            aria-selected="true"
-            data-view="diagram"
-            class="active"
-            type="button"
-          >
-            Diagram
-          </button>
-          <button
-            role="tab"
-            aria-selected="false"
-            data-view="source"
-            type="button"
-          >
-            Source
-          </button>
-          <button
-            role="tab"
-            aria-selected="false"
-            data-view="split"
-            type="button"
-          >
-            Split
-          </button>
-          <button
-            role="tab"
-            aria-selected="false"
-            data-view="trace"
-            type="button"
-          >
-            Execution trace
-          </button>
-          <span id="statusText"></span>
+      <header class="workspace-header">
+        <div>
+          <h2 id="viewTitle">Flow</h2>
+          <span id="currentPath">No file selected</span>
         </div>
-        <div
-          id="appMessage"
-          class="app-message"
-          role="status"
-          aria-live="polite"
-        ></div>
-        <div id="diagramView" class="diagram"></div>
-        <textarea
-          id="sourceView"
-          class="source hidden"
-          spellcheck="false"
-        ></textarea>
-        <div id="traceView" class="trace-view hidden"></div>
+        <span class="version">0.6.0 development</span>
+      </header>
+
+      <section id="flowView" class="view" aria-label="Flow graph">
+        <div class="placeholder">
+          <strong>Open source files</strong>
+          <span>The complete program graph will appear here.</span>
+        </div>
       </section>
 
-      <aside class="sidebar right" aria-label="Inspector and validation">
-        <section>
-          <h2>Inspector</h2>
-          <div id="inspector" class="inspector empty">Select a block.</div>
-        </section>
-        <section>
-          <h2>Validation</h2>
-          <div id="validation"></div>
-        </section>
-      </aside>
+      <section id="sourceView" class="view hidden" aria-label="Source editor">
+        <div id="sourceWarning" class="source-warning hidden"></div>
+        <div class="code-editor">
+          <pre id="sourceHighlight" aria-hidden="true"></pre>
+          <textarea
+            id="sourceEditor"
+            aria-label="Raw source"
+            autocomplete="off"
+            autocapitalize="off"
+            spellcheck="false"
+            disabled
+          ></textarea>
+        </div>
+      </section>
+
+      <section id="executedView" class="view hidden" aria-label="Executed code">
+        <div class="placeholder">
+          <strong>No execution yet</strong>
+          <span>Choose inputs in the Flow view to select a path.</span>
+        </div>
+      </section>
     </main>
 
-    <dialog id="newProjectDialog">
-      <form id="newProjectForm">
-        <h2>New project</h2>
-        <p id="newProjectWarning" class="dialog-warning"></p>
-        <label for="newProjectName">Project name</label>
-        <input id="newProjectName" type="text" required value="Untitled" />
-        <div class="dialog-actions">
-          <button id="cancelNewProject" type="button">Cancel</button>
-          <button type="submit">Create project</button>
-        </div>
-      </form>
-    </dialog>
-
-    <dialog id="renameFileDialog">
-      <form id="renameFileForm">
-        <h2>Rename project file</h2>
-        <label for="renameFilePath">Relative DOS path</label>
-        <input id="renameFilePath" type="text" required />
-        <p id="renameFileError" class="dialog-warning"></p>
-        <div class="dialog-actions">
-          <button id="cancelRenameFile" type="button">Cancel</button>
-          <button type="submit">Rename file</button>
-        </div>
-      </form>
-    </dialog>
-
-    <dialog id="importDialog" class="import-dialog">
-      <form id="importForm">
-        <h2>Import into project</h2>
-        <div class="button-row">
-          <button id="browseFiles" type="button">Browse files</button>
-          <button id="browseFolder" type="button">Browse folder</button>
-        </div>
-        <input
-          id="fileInput"
-          class="hidden"
-          type="file"
-          multiple
-          accept=".bat,.sys,.txt,.batflow"
-        />
-        <input
-          id="folderInput"
-          class="hidden"
-          type="file"
-          multiple
-          webkitdirectory
-        />
-        <fieldset id="folderRootChoice" class="hidden">
-          <legend>Selected folder placement</legend>
-          <label
-            ><input type="radio" name="folderRoot" value="strip" /> Use folder
-            contents as project root</label
-          >
-          <label
-            ><input type="radio" name="folderRoot" value="keep" /> Keep selected
-            folder as the top-level directory</label
-          >
-        </fieldset>
-        <div id="importSummary" class="import-summary">
-          Browse for source files, a source folder, or one BATFlow project.
-        </div>
-        <div id="importPreview" class="import-preview"></div>
-        <p id="importError" class="dialog-warning"></p>
-        <div class="dialog-actions">
-          <button id="cancelImport" type="button">Cancel</button>
-          <button id="confirmImport" type="submit" disabled>Import</button>
-        </div>
-      </form>
-    </dialog>
-
-    <dialog
-      id="diagnosticsDialog"
-      class="diagnostics-dialog"
-      aria-labelledby="diagnosticsTitle"
-    >
-      <section>
-        <h2 id="diagnosticsTitle">Diagnostics</h2>
-        <div id="diagnosticsOverall" class="diagnostics-overall"></div>
-        <dl class="diagnostics-summary">
-          <div>
-            <dt>Save state</dt>
-            <dd id="diagnosticsSaveState"></dd>
-          </div>
-          <div>
-            <dt>Last successful save</dt>
-            <dd id="diagnosticsLastSave"></dd>
-          </div>
-          <div>
-            <dt>Project storage</dt>
-            <dd id="diagnosticsStorageState"></dd>
-          </div>
-          <div>
-            <dt>Diagnostic history</dt>
-            <dd id="diagnosticsRetentionState"></dd>
-          </div>
-        </dl>
-        <h3>Version domains</h3>
-        <dl id="diagnosticsVersions" class="diagnostics-summary"></dl>
-        <h3>Session events</h3>
-        <div id="diagnosticsEvents" class="diagnostics-events"></div>
-        <div class="dialog-actions">
-          <button id="clearDiagnostics" type="button">Clear history</button>
-          <button id="exportDiagnostics" type="button">
-            Export diagnostics
-          </button>
-          <button id="closeDiagnostics" type="button">Close</button>
-        </div>
-      </section>
-    </dialog>
-
-    <script type="module" src="app.js?v=0.5.3-dev"></script>
+    <input id="fileInput" type="file" accept=".bat,.sys" multiple hidden />
+    <input id="folderInput" type="file" webkitdirectory multiple hidden />
+    <script type="module" src="app.js?v=0.6.0"></script>
   </body>
 </html>
