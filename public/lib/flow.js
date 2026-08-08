@@ -186,7 +186,6 @@ export function buildBatchFlow(parsed) {
       continue;
     }
     if (node.kind === "exit") {
-      edges.push(edge(node.id, endId, "exit", "Exit"));
       continue;
     }
     if (node.kind === "transfer") continue;
