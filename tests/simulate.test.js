@@ -83,3 +83,38 @@ test("FOR calls return for every item before execution continues", () => {
   assert.equal(lines.at(-1), "echo done");
   assert.equal(run.stop, "Complete");
 });
+
+test("CHOICE defaults to its first key and EXIT does not return from a call", () => {
+  const choice = buildProgram(
+    new Map([
+      [
+        "autoexec.bat",
+        source(
+          "AUTOEXEC.BAT",
+          "choice /c:YN\nif errorlevel 1 goto yes\necho no\n:yes\necho yes",
+        ),
+      ],
+    ]),
+    "autoexec.bat",
+  );
+  assert.doesNotMatch(
+    simulate(choice)
+      .executed.map((row) => row.source)
+      .join("\n"),
+    /echo no/,
+  );
+
+  const exit = buildProgram(
+    new Map([
+      ["autoexec.bat", source("AUTOEXEC.BAT", "call CHILD.BAT\necho returned")],
+      ["child.bat", source("CHILD.BAT", "exit")],
+    ]),
+    "autoexec.bat",
+  );
+  assert.doesNotMatch(
+    simulate(exit)
+      .executed.map((row) => row.source)
+      .join("\n"),
+    /echo returned/,
+  );
+});
