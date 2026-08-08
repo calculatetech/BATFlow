@@ -1,8 +1,8 @@
 # BATFlow 0.6.0 rebuild roadmap
 
-BATFlow is being rebuilt as a static, client-side MS-DOS 7.1 flow visualizer.
-Each task has one outcome, lands through a pull request into `rebuild/0.6.0`,
-and must pass the required `verify` check before merge.
+BATFlow 0.6.0 was rebuilt as a static, client-side MS-DOS 7.1 flow visualizer.
+Each completed task has one outcome, landed through a pull request into
+`rebuild/0.6.0`, and passed the required `verify` check before merge.
 
 | Task   | Outcome                                                                     | Status   | Pull request                                            |
 | ------ | --------------------------------------------------------------------------- | -------- | ------------------------------------------------------- |
