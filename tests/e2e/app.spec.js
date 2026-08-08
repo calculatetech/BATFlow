@@ -27,6 +27,8 @@ test("loads, edits, switches views, and exposes fixed session actions", async ({
 
   await expect(page.locator(".file-item")).toHaveCount(2);
   await expect(page.locator("#currentPath")).toContainText("entry");
+  await expect(page.locator(".flow-node")).not.toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Fit graph" })).toBeVisible();
   await page.getByRole("button", { name: "Source", exact: true }).click();
   await page.locator("#sourceEditor").fill("@echo off\nset MODE=TEST\n");
   await expect(page.locator("#currentPath")).toContainText("modified");
