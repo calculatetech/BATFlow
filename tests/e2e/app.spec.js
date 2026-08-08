@@ -159,3 +159,30 @@ test("reports and clears a confirmed infinite loop", async ({
   await page.getByRole("button", { name: "Executed code" }).click();
   await expect(page.locator(".infinite-loop-warning")).toHaveCount(0);
 });
+
+test("shows a warning when a cycle executes no source rows", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.locator("#fileInput").setInputFiles([
+    {
+      name: "AUTOEXEC.BAT",
+      mimeType: "text/plain",
+      buffer: Buffer.from(""),
+    },
+    {
+      name: "CONFIG.SYS",
+      mimeType: "text/plain",
+      buffer: Buffer.from(
+        "[menu]\r\nsubmenu=other,Other\r\n[other]\r\nsubmenu=menu,Back\r\n",
+      ),
+    },
+  ]);
+
+  await expect(page.locator(".flow-node.infinite-loop")).toBeVisible();
+  await page.getByRole("button", { name: "Executed code" }).click();
+  await expect(page.locator(".infinite-loop-warning")).toContainText(
+    "Infinite loop detected. Simulation stopped after one cycle.",
+  );
+  await expect(page.getByText("No execution yet")).toHaveCount(0);
+});

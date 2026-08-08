@@ -133,7 +133,7 @@ function updateSimulation() {
 
 function renderExecuted() {
   const rows = state.run?.executed || [];
-  if (!rows.length) {
+  if (!rows.length && !state.run?.warning) {
     $("executedView").innerHTML =
       '<div class="placeholder"><strong>No execution yet</strong><span>Open a batch program to simulate it.</span></div>';
     return;
