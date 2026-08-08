@@ -9,8 +9,8 @@ and must pass the required `verify` check before merge.
 | BF-001 | Lock the rebuild contract and delivery rules.                               | Complete  | [#8](https://github.com/calculatetech/BATFlow/pull/8)   |
 | BF-002 | Replace the application with a memory-only source session and Breeze shell. | Complete  | [#9](https://github.com/calculatetech/BATFlow/pull/9)   |
 | BF-003 | Build the batch parser and control-flow graph.                              | Complete  | [#10](https://github.com/calculatetech/BATFlow/pull/10) |
-| BF-004 | Link CONFIG.SYS, AUTOEXEC.BAT, and reachable batch files.                   | In review | [#11](https://github.com/calculatetech/BATFlow/pull/11) |
-| BF-005 | Render the complete program as a pannable, zoomable 2D graph.               | Planned   | —                                                       |
+| BF-004 | Link CONFIG.SYS, AUTOEXEC.BAT, and reachable batch files.                   | Complete  | [#11](https://github.com/calculatetech/BATFlow/pull/11) |
+| BF-005 | Render the complete program as a pannable, zoomable 2D graph.               | In review | [#12](https://github.com/calculatetech/BATFlow/pull/12) |
 | BF-006 | Select active paths with in-block inputs and show executed code.            | Planned   | —                                                       |
 | BF-007 | Enforce browser, accessibility, visual, and performance acceptance.         | Planned   | —                                                       |
 | BF-008 | Cut over the reviewed 0.6.0 application to `main`.                          | Planned   | —                                                       |
