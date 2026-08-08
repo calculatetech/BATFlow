@@ -247,6 +247,164 @@ button:disabled {
   background: var(--window);
 }
 
+#flowView {
+  overflow: hidden;
+  background-color: #181b1d;
+  background-image: radial-gradient(#34383c 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.graph-viewport {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+}
+
+.graph-viewport:active {
+  cursor: grabbing;
+}
+
+.graph-scene {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+}
+
+.edge-layer,
+.node-layer {
+  position: absolute;
+  inset: 0;
+}
+
+.flow-edge {
+  fill: none;
+  stroke: #778087;
+  stroke-width: 2;
+}
+
+.flow-edge.true,
+.flow-edge.call,
+.flow-edge.boot {
+  stroke: var(--accent);
+}
+
+.flow-edge.false,
+.flow-edge.exit {
+  stroke-dasharray: 7 5;
+}
+
+.flow-edge.jump,
+.flow-edge.loop,
+.flow-edge.return {
+  stroke: #a78bda;
+}
+
+.edge-layer marker path {
+  fill: #778087;
+}
+
+.flow-node {
+  position: absolute;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  overflow: hidden;
+  background: var(--panel);
+  border: 1px solid #596168;
+  border-radius: 5px;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 28%);
+}
+
+.flow-node:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.flow-node.decision,
+.flow-node.menu,
+.flow-node.loop {
+  border-color: var(--accent);
+}
+
+.flow-node.start,
+.flow-node.end,
+.flow-node.exit {
+  border-color: #7f8c8d;
+}
+
+.node-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  color: #eaf7fe;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: #28343b;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.node-location {
+  overflow: hidden;
+  color: var(--muted);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.node-labels {
+  padding: 5px 10px 0;
+  color: #b9a6e9;
+  font:
+    13px/1.3 ui-monospace,
+    monospace;
+}
+
+.node-source {
+  margin: 0;
+  padding: 8px 10px 10px;
+  overflow: auto;
+  color: var(--text);
+  white-space: pre-wrap;
+  font:
+    14px/1.4 ui-monospace,
+    "Cascadia Mono",
+    "Liberation Mono",
+    monospace;
+}
+
+.graph-controls {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  box-shadow: 0 3px 12px rgb(0 0 0 / 30%);
+}
+
+.graph-controls button {
+  min-width: 40px;
+}
+
+.graph-controls output {
+  min-width: 52px;
+  color: var(--muted);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
 .hidden {
   display: none !important;
 }

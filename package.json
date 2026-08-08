@@ -5,7 +5,7 @@
   "type": "module",
   "description": "A static MS-DOS 7.1 control-flow visualizer.",
   "scripts": {
-    "check:syntax": "node --check public/app.js && node --check public/lib/source.js && node --check public/lib/batch.js && node --check public/lib/config.js && node --check public/lib/flow.js",
+    "check:syntax": "node --check public/app.js && node --check public/lib/source.js && node --check public/lib/batch.js && node --check public/lib/config.js && node --check public/lib/flow.js && node --check public/lib/graph.js",
     "lint": "eslint .",
     "format:check": "prettier --check \"**/*.{css,html,js,json,md,mjs,yml}\"",
     "validate:html": "html-validate public/index.html",

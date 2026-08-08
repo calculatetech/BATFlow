@@ -3,6 +3,8 @@ import {
   readSourceFiles,
   serializeSource,
 } from "./lib/source.js?v=0.6.0";
+import { buildProgram } from "./lib/flow.js?v=0.6.0";
+import { mountGraph } from "./lib/graph.js?v=0.6.0";
 
 const $ = (id) => document.getElementById(id);
 const state = {
@@ -11,6 +13,8 @@ const state = {
   entry: "",
   view: "flow",
   revision: 0,
+  program: null,
+  graphRevision: -1,
 };
 let rebuildTimer;
 
@@ -82,9 +86,25 @@ function renderSource() {
     : "";
 }
 
+function rebuildProgram() {
+  state.program = buildProgram(state.files, state.entry);
+  state.revision += 1;
+  if (state.view === "flow") renderFlow();
+}
+
+function renderFlow() {
+  if (state.graphRevision === state.revision) return;
+  mountGraph(
+    $("flowView"),
+    state.program || buildProgram(state.files, state.entry),
+  );
+  state.graphRevision = state.revision;
+}
+
 function render() {
   renderFiles();
   renderSource();
+  if (state.view === "flow") renderFlow();
   const file = selectedFile();
   $("currentPath").textContent = file
     ? `${file.path}${file.key === state.entry ? " · entry" : ""}${file.dirty ? " · modified" : ""}`
@@ -121,6 +141,7 @@ async function openSources(fileList) {
     for (const source of sources) state.files.set(source.key, source);
     state.current ||= sources[0].key;
     state.entry ||= chooseEntry();
+    rebuildProgram();
     setMessage(
       `${sources.length} file${sources.length === 1 ? "" : "s"} opened`,
     );
@@ -135,9 +156,7 @@ function scheduleRebuild() {
   const revision = ++state.revision;
   rebuildTimer = setTimeout(() => {
     if (revision !== state.revision) return;
-    globalThis.dispatchEvent(
-      new CustomEvent("batflow:source-change", { detail: { revision } }),
-    );
+    rebuildProgram();
   }, 150);
 }
 
@@ -164,6 +183,7 @@ $("folderInput").addEventListener("change", (event) => {
 $("setEntry").addEventListener("click", () => {
   if (!state.current) return;
   state.entry = state.current;
+  rebuildProgram();
   setMessage(`${selectedFile().path} is the entry file`);
   render();
 });
@@ -189,6 +209,8 @@ $("resetSession").addEventListener("click", () => {
   state.current = "";
   state.entry = "";
   state.revision += 1;
+  state.program = null;
+  state.graphRevision = -1;
   setMessage("Session reset");
   render();
 });
