@@ -152,6 +152,16 @@ function renderExecuted() {
     tr.append(location, source);
     body.append(tr);
   }
+  if (state.run.warning) {
+    const tr = document.createElement("tr");
+    const location = document.createElement("td");
+    const message = document.createElement("td");
+    tr.className = "infinite-loop-warning";
+    location.textContent = `${state.run.warning.file}:${state.run.warning.line}`;
+    message.textContent = `Warning: ${state.run.warning.message}`;
+    tr.append(location, message);
+    body.append(tr);
+  }
   table.append(body);
   $("executedView").replaceChildren(table);
 }

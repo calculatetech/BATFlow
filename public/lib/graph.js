@@ -188,7 +188,8 @@ function graphNode(node, position, program, scenario, onChange) {
     "node-location",
     node.startLine ? `${node.file}:${node.startLine}` : node.file,
   );
-  title.append(location);
+  const loopAlert = element("span", "node-loop-alert hidden", "Infinite loop");
+  title.append(loopAlert, location);
   const labels = node.labels?.length
     ? element(
         "div",
@@ -225,6 +226,7 @@ function edgePath(from, to) {
 
 export function applySimulation(root, run) {
   root.querySelectorAll("[data-node]").forEach((node) => {
+    const infiniteLoop = run.warning?.nodeId === node.dataset.node;
     node.classList.toggle(
       "active-path",
       run.activeNodes.has(node.dataset.node),
@@ -233,6 +235,11 @@ export function applySimulation(root, run) {
       "inactive-path",
       !run.activeNodes.has(node.dataset.node),
     );
+    node.classList.toggle("infinite-loop", infiniteLoop);
+    node
+      .querySelector(".node-loop-alert")
+      .classList.toggle("hidden", !infiniteLoop);
+    node.title = infiniteLoop ? run.warning.message : "";
   });
   root.querySelectorAll("[data-edge]").forEach((edge) => {
     edge.classList.toggle(

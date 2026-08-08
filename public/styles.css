@@ -375,6 +375,17 @@ button:disabled {
   border-color: #7f8c8d;
 }
 
+.flow-node.infinite-loop {
+  border-color: #fdbc4b;
+  box-shadow:
+    0 0 0 2px rgb(253 188 75 / 55%),
+    0 4px 14px rgb(0 0 0 / 28%);
+}
+
+.flow-node.infinite-loop .node-title {
+  background: #4a3c1e;
+}
+
 .node-title {
   display: flex;
   justify-content: space-between;
@@ -397,6 +408,14 @@ button:disabled {
   text-overflow: ellipsis;
   text-transform: none;
   white-space: nowrap;
+}
+
+.node-loop-alert {
+  padding: 1px 5px;
+  color: #17191b;
+  font-size: 11px;
+  background: #fdbc4b;
+  border-radius: 3px;
 }
 
 .node-labels {
@@ -472,6 +491,12 @@ button:disabled {
   width: 240px;
   color: var(--muted);
   white-space: nowrap;
+}
+
+.executed-code .infinite-loop-warning td {
+  color: #fdbc4b;
+  background: #332b19;
+  border-block: 1px solid #8e6d2c;
 }
 
 .graph-controls {

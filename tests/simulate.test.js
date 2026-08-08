@@ -81,7 +81,36 @@ test("FOR calls return for every item before execution continues", () => {
 
   assert.equal(lines.filter((line) => line === "echo child %1").length, 2);
   assert.equal(lines.at(-1), "echo done");
+  assert.equal(run.warning, null);
   assert.equal(run.stop, "Complete");
+});
+
+test("a confirmed GOTO cycle runs once and reports its closing block", () => {
+  const program = buildProgram(
+    new Map([
+      ["autoexec.bat", source("AUTOEXEC.BAT", ":again\necho once\ngoto again")],
+    ]),
+    "autoexec.bat",
+  );
+  const run = simulate(program);
+
+  assert.equal(
+    run.executed.filter((row) => row.source === "echo once").length,
+    1,
+  );
+  assert.equal(
+    run.executed.filter((row) => row.source === "goto again").length,
+    1,
+  );
+  assert.deepEqual(run.warning, {
+    code: "simulation.infinite-loop",
+    message: "Infinite loop detected. Simulation stopped after one cycle.",
+    nodeId: "node:autoexec.bat:3",
+    edgeId: "node:autoexec.bat:3->node:autoexec.bat:2:jump",
+    file: "AUTOEXEC.BAT",
+    line: 3,
+  });
+  assert.equal(run.stop, "Infinite loop detected");
 });
 
 test("CHOICE defaults to its first key and EXIT does not return from a call", () => {

@@ -10,6 +10,19 @@ function setArguments(runtime, values) {
   });
 }
 
+function stateKey(nodeId, runtime, loops, stack) {
+  return JSON.stringify([
+    nodeId,
+    [...Object.entries(runtime.environment)].sort(([left], [right]) =>
+      left.localeCompare(right),
+    ),
+    runtime.errorlevel,
+    runtime.arguments,
+    [...loops].sort(([left], [right]) => left.localeCompare(right)),
+    stack,
+  ]);
+}
+
 function decisionResult(node, input, runtime) {
   const condition = node.data;
   let result;
@@ -78,12 +91,30 @@ export function simulate(program, scenario = {}) {
   const executed = [];
   const loops = new Map();
   const stack = [];
+  const visited = new Set();
   let current = program.entryId;
+  let previousEdge = null;
+  let warning = null;
   let stop = "Complete";
 
   for (let steps = 0; current && steps < 1000; steps += 1) {
     const node = nodes.get(current);
     if (!node) break;
+    const key = stateKey(node.id, runtime, loops, stack);
+    if (visited.has(key)) {
+      const source = nodes.get(previousEdge?.from) || node;
+      warning = {
+        code: "simulation.infinite-loop",
+        message: "Infinite loop detected. Simulation stopped after one cycle.",
+        nodeId: source.id,
+        edgeId: previousEdge?.id || "",
+        file: source.file,
+        line: source.startLine,
+      };
+      stop = "Infinite loop detected";
+      break;
+    }
+    visited.add(key);
     const input = scenario[node.id] || {};
     activeNodes.add(node.id);
     if (node.kind === "start" && (node.id === program.entryId || input.args)) {
@@ -135,6 +166,7 @@ export function simulate(program, scenario = {}) {
     if (selected.config !== undefined)
       runtime.environment.config = selected.config;
     activeEdges.add(selected.id);
+    previousEdge = selected;
     current = selected.to;
     if (steps === 999) stop = "Stopped after 1,000 steps";
   }
@@ -143,6 +175,7 @@ export function simulate(program, scenario = {}) {
     activeEdges,
     executed,
     environment: runtime.environment,
+    warning,
     stop,
   };
 }
