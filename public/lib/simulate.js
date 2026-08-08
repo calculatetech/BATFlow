@@ -93,7 +93,7 @@ export function simulate(program, scenario = {}) {
       executed.push({
         nodeId: node.id,
         file: node.file,
-        line: node.startLine + index,
+        line: node.lineNumbers?.[index] ?? node.startLine + index,
         source,
       }),
     );
