@@ -10,7 +10,7 @@ function setArguments(runtime, values) {
   });
 }
 
-function stateKey(nodeId, runtime, loops, stack) {
+function executionKey(nodeId, runtime, loops) {
   return JSON.stringify([
     nodeId,
     [...Object.entries(runtime.environment)].sort(([left], [right]) =>
@@ -19,8 +19,22 @@ function stateKey(nodeId, runtime, loops, stack) {
     runtime.errorlevel,
     runtime.arguments,
     [...loops].sort(([left], [right]) => left.localeCompare(right)),
-    stack,
   ]);
+}
+
+function stateKey(nodeId, runtime, loops, stack) {
+  return JSON.stringify([executionKey(nodeId, runtime, loops), stack]);
+}
+
+function infiniteLoopWarning(node, edge) {
+  return {
+    code: "simulation.infinite-loop",
+    message: "Infinite loop detected. Simulation stopped after one cycle.",
+    nodeId: node.id,
+    edgeId: edge?.id || "",
+    file: node.file,
+    line: node.startLine,
+  };
 }
 
 function decisionResult(node, input, runtime) {
@@ -73,10 +87,13 @@ function nextEdge(node, outgoing, input, runtime, loops, stack) {
     loops.delete(node.id);
     return outgoing.find((edge) => edge.role === "false");
   }
-  if (node.kind === "end" && stack.length) {
-    const frame = stack.pop();
-    setArguments(runtime, frame.arguments);
-    return outgoing.find((edge) => edge.callSite === frame.callSite);
+  if (node.kind === "end") {
+    if (stack.length) {
+      const frame = stack.pop();
+      setArguments(runtime, frame.arguments);
+      return outgoing.find((edge) => edge.callSite === frame.callSite);
+    }
+    return undefined;
   }
   return outgoing[0];
 }
@@ -93,6 +110,8 @@ export function simulate(program, scenario = {}) {
   const stack = [];
   const visited = new Set();
   let current = program.entryId;
+  let currentEntry = "";
+  let currentEntryKey = "";
   let previousEdge = null;
   let warning = null;
   let stop = "Complete";
@@ -103,22 +122,26 @@ export function simulate(program, scenario = {}) {
     const key = stateKey(node.id, runtime, loops, stack);
     if (visited.has(key)) {
       const source = nodes.get(previousEdge?.from) || node;
-      warning = {
-        code: "simulation.infinite-loop",
-        message: "Infinite loop detected. Simulation stopped after one cycle.",
-        nodeId: source.id,
-        edgeId: previousEdge?.id || "",
-        file: source.file,
-        line: source.startLine,
-      };
+      warning = infiniteLoopWarning(source, previousEdge);
       stop = "Infinite loop detected";
       break;
     }
     visited.add(key);
     const input = scenario[node.id] || {};
     activeNodes.add(node.id);
-    if (node.kind === "start" && (node.id === program.entryId || input.args)) {
+    if (node.kind === "end" && stack.length) {
+      currentEntry = stack.at(-1).entry;
+      currentEntryKey = stack.at(-1).entryKey;
+    }
+    if (
+      node.kind === "start" &&
+      ((node.id === program.entryId && !currentEntry) || input.args)
+    ) {
       setArguments(runtime, splitArgs(input.args || ""));
+    }
+    if (node.kind === "start") {
+      currentEntry = node.id;
+      currentEntryKey = executionKey(node.id, runtime, loops);
     }
     node.lines.forEach((source, index) =>
       executed.push({
@@ -150,21 +173,49 @@ export function simulate(program, scenario = {}) {
       break;
     }
     if (selected.role === "call") {
-      stack.push({ callSite: node.id, arguments: [...runtime.arguments] });
       const call = ["call", "shell-call"].includes(node.statementKind)
         ? node.statementKind === "call"
           ? node
           : parseCommand(node.data.action)
         : parseCommand(node.data.action || "");
+      const callerArguments = [...runtime.arguments];
       setArguments(
         runtime,
         (call.data.args || []).map((value) =>
           expand(value, runtime.environment),
         ),
       );
+      const targetInput = scenario[selected.to] || {};
+      if (targetInput.args)
+        setArguments(runtime, splitArgs(targetInput.args || ""));
+      const targetKey = executionKey(selected.to, runtime, loops);
+      if (
+        (selected.to === currentEntry && targetKey === currentEntryKey) ||
+        stack.some(
+          (frame) =>
+            frame.entry === selected.to && frame.entryKey === targetKey,
+        )
+      ) {
+        activeEdges.add(selected.id);
+        warning = infiniteLoopWarning(node, selected);
+        stop = "Infinite loop detected";
+        break;
+      }
+      stack.push({
+        callSite: node.id,
+        arguments: callerArguments,
+        entry: currentEntry,
+        entryKey: currentEntryKey,
+      });
+      currentEntry = selected.to;
+      currentEntryKey = targetKey;
     }
     if (selected.config !== undefined)
       runtime.environment.config = selected.config;
+    if (selected.role !== "call" && nodes.get(selected.to)?.kind === "start") {
+      currentEntry = selected.to;
+      currentEntryKey = executionKey(selected.to, runtime, loops);
+    }
     activeEdges.add(selected.id);
     previousEdge = selected;
     current = selected.to;
