@@ -33,8 +33,11 @@ function selectedFile() {
 
 function chooseEntry() {
   const paths = [...state.files.keys()];
+  const autoexec = paths
+    .filter((path) => /(^|\/)autoexec\.bat$/i.test(path))
+    .sort((left, right) => left.split("/").length - right.split("/").length);
   return (
-    paths.find((path) => /(^|\/)autoexec\.bat$/i.test(path)) ||
+    autoexec[0] ||
     (paths.filter((path) => /\.bat$/i.test(path)).length === 1
       ? paths.find((path) => /\.bat$/i.test(path))
       : "")
