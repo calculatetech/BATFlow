@@ -6,8 +6,8 @@ and must pass the required `verify` check before merge.
 
 | Task   | Outcome                                                                     | Status    | Pull request                                          |
 | ------ | --------------------------------------------------------------------------- | --------- | ----------------------------------------------------- |
-| BF-001 | Lock the rebuild contract and delivery rules.                               | In review | [#8](https://github.com/calculatetech/BATFlow/pull/8) |
-| BF-002 | Replace the application with a memory-only source session and Breeze shell. | Planned   | —                                                     |
+| BF-001 | Lock the rebuild contract and delivery rules.                               | Complete  | [#8](https://github.com/calculatetech/BATFlow/pull/8) |
+| BF-002 | Replace the application with a memory-only source session and Breeze shell. | In review | [#9](https://github.com/calculatetech/BATFlow/pull/9) |
 | BF-003 | Build the batch parser and control-flow graph.                              | Planned   | —                                                     |
 | BF-004 | Link CONFIG.SYS, AUTOEXEC.BAT, and reachable batch files.                   | Planned   | —                                                     |
 | BF-005 | Render the complete program as a pannable, zoomable 2D graph.               | Planned   | —                                                     |
