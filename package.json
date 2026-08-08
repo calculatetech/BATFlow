@@ -1,19 +1,16 @@
 {
   "name": "batflow",
-  "version": "0.5.3",
+  "version": "0.6.0",
   "private": true,
   "type": "module",
-  "description": "A client-side visual editor and control-flow simulator for MS-DOS 7.1 batch files.",
+  "description": "A static MS-DOS 7.1 control-flow visualizer.",
   "scripts": {
-    "check:syntax": "node --check public/app.js && node --check public/lib/batch-core.js && node --check public/lib/diagnostics.js && node --check public/lib/project-format.js && node --check public/lib/save-queue.js && node --check public/lib/simulation.js && node --check public/lib/storage.js",
+    "check:syntax": "node --check public/app.js && node --check public/lib/source.js && node --check public/lib/batch.js && node --check public/lib/config.js && node --check public/lib/flow.js && node --check public/lib/graph.js && node --check public/lib/simulate.js",
     "lint": "eslint .",
     "format:check": "prettier --check \"**/*.{css,html,js,json,md,mjs,yml}\"",
     "validate:html": "html-validate public/index.html",
     "test": "node --test tests/*.test.js",
     "test:e2e": "playwright test",
-    "package": "node scripts/package-release.mjs",
-    "verify:package": "node scripts/verify-package.mjs",
-    "verify:reproducible": "node scripts/verify-reproducible.mjs",
     "check": "npm run check:syntax && npm run lint && npm run format:check && npm run validate:html && npm test",
     "smoke": "node scripts/http-smoke.mjs"
   },
@@ -25,10 +22,8 @@
     "@playwright/test": "1.62.0",
     "axe-core": "4.12.1",
     "eslint": "10.8.0",
-    "fake-indexeddb": "6.2.2",
     "globals": "17.8.0",
     "html-validate": "11.5.6",
-    "prettier": "3.9.6",
-    "yazl": "3.3.1"
+    "prettier": "3.9.6"
   }
 }

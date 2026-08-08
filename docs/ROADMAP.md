@@ -1,122 +1,43 @@
-# BATFlow roadmap
+# BATFlow 0.6.0 rebuild roadmap
 
-Last updated: July 28, 2026
+BATFlow 0.6.0 was rebuilt as a static, client-side MS-DOS 7.1 flow visualizer.
+Each completed task has one outcome, landed through a pull request into
+`rebuild/0.6.0`, and passed the required `verify` check before merge.
 
-Current baseline: **0.5.3 development**
-
-BATFlow, formerly called `passes`, is being converted from an unversioned
-prototype into a managed and genuinely usable application. The detailed audit
-is preserved in the [project assessment](PROJECT_ASSESSMENT.md); this roadmap
-is the human-facing record of completed foundations and remaining priorities.
+| Task   | Outcome                                                                     | Status   | Pull request                                            |
+| ------ | --------------------------------------------------------------------------- | -------- | ------------------------------------------------------- |
+| BF-001 | Lock the rebuild contract and delivery rules.                               | Complete | [#8](https://github.com/calculatetech/BATFlow/pull/8)   |
+| BF-002 | Replace the application with a memory-only source session and Breeze shell. | Complete | [#9](https://github.com/calculatetech/BATFlow/pull/9)   |
+| BF-003 | Build the batch parser and control-flow graph.                              | Complete | [#10](https://github.com/calculatetech/BATFlow/pull/10) |
+| BF-004 | Link CONFIG.SYS, AUTOEXEC.BAT, and reachable batch files.                   | Complete | [#11](https://github.com/calculatetech/BATFlow/pull/11) |
+| BF-005 | Render the complete program as a pannable, zoomable 2D graph.               | Complete | [#12](https://github.com/calculatetech/BATFlow/pull/12) |
+| BF-006 | Select active paths with in-block inputs and show executed code.            | Complete | [#13](https://github.com/calculatetech/BATFlow/pull/13) |
+| BF-007 | Enforce browser, accessibility, visual, and performance acceptance.         | Complete | [#14](https://github.com/calculatetech/BATFlow/pull/14) |
+| BF-008 | Cut over the reviewed 0.6.0 application to `main`.                          | Complete | [#15](https://github.com/calculatetech/BATFlow/pull/15) |
 
 ## Product boundary
 
-- BATFlow is a static, entirely client-side application.
-- Win98 MS-DOS 7.1 `COMMAND.COM` is the initial interpreter profile.
-- Simulation follows modeled control flow but never executes imported commands.
-- Projects persist in browser-owned storage and can be exported.
-- BAT and CONFIG.SYS inputs are user-supplied; private test inputs are never
-  shipped with the application.
-- The roadmap is repository documentation, not an in-application feature.
+- Load UTF-8 BAT and CONFIG.SYS sources into one in-memory session.
+- Visualize every possible branch before simulation; simulation selects and
+  emphasizes a path without changing graph topology.
+- Model MS-DOS 7.1 `COMMAND.COM` flow and complete multiple-configuration boot
+  menus, but never execute imported commands.
+- Deploy the contents of `public/` directly on an ordinary static web server.
+- Support current desktop Firefox first and Chromium second.
+- Keep inputs in the graph block that produces or consumes them.
 
-## Delivery and version policy
+BATFlow is not an IDE, project database, version-control system, diff tool,
+backend service, or offline application. It has no named projects, browser
+persistence, service worker, edit history, block editor, or project container.
 
-- All work is performed in a branch or dedicated worktree.
-- The project owner verifies the uncommitted working tree before it is
-  committed.
-- After approval, the exact reviewed tree is committed and pushed. It reaches
-  `main` only after required CI succeeds, all pull-request comments and review
-  threads are inspected, actionable feedback is addressed, and every thread is
-  resolved.
-- CI-generated bundles validate packaging and reproducibility; they are not
-  substitutes for human testing.
-- Code changes and major rework receive challenged adversarial review before
-  human approval. Simple documentation and progress updates are exempt.
-- Private fixtures live under ignored `docs/private/`. Detailed local results
-  live under ignored `.agent/test-results/`; neither is committed.
-- Roadmap status changes accompany the work they describe.
-- Managed development advances through SemVer-compatible `0.x` versions.
-  Formal Git tags and GitHub releases begin at `1.0.0`.
-- Project-format, IndexedDB-schema, and interpreter-profile versions remain
-  independent from the product version.
+## Delivery rules
 
-## Completed: managed 0.5.0 foundation
-
-Status: **Human-approved, CI-verified, and merged in pull request #1**
-
-- Established honest Git provenance, canonical product metadata, a locked Node
-  24 toolchain, required CI, and deterministic deployment-bundle validation.
-- Separated product, project-format, IndexedDB-schema, and interpreter-profile
-  versions.
-- Added validated project import/export, explicit UTF-8 and line-ending
-  behavior, durable source identities, visible storage failures, and
-  non-destructive recovery from known legacy database names.
-- Added confirmation for destructive project and file replacement operations.
-- Corrected outcome handling, stale traces, command prefixes, quoted paths,
-  target resolution, label grouping, loops, conditional transfers, interpreter
-  exit, CONFIG.SYS choices, Split-view selection, blank blocks, caching, and
-  `.batflow` downloads.
-- Added static, unit, browser, persistence, migration, accessibility, HTTP,
-  packaging, checksum, reproducibility, and private-path boundary checks.
-- Recorded the compatibility boundary, project format, baseline assessment,
-  changelog, and human-verification process.
-
-This foundation makes changes manageable and testable. It is not a declaration
-that BATFlow is stable, complete, or ready for formal release.
-
-## Completed: 0.5.1 simulation-state hardening
-
-- Added one validated, project-scoped active simulation scenario.
-- Persisted variable, path-existence, and ERRORLEVEL inputs across file
-  switches, browser reloads, storage, and `.batflow` export/import.
-- Added a confirmed project-wide Reset inputs action.
-- Preserved CONFIG.SYS-derived defaults without storing them until simulation
-  input interaction.
-
-## Completed: 0.5.2 project and file identity hardening
-
-- Added editable project names, safe export filenames, durable file IDs, and a
-  persisted entry-file designation that prefers root `AUTOEXEC.BAT`.
-- Added rename, deletion, entry selection, relative-folder import, DOS 8.3 path
-  diagnostics, and case-insensitive collision controls.
-- Added an atomic import preview with explicit folder-root placement and
-  Replace, Keep both, or Skip decisions.
-- Advanced `.batflow` project format to version 2 with tested version 1
-  migration while retaining IndexedDB schema version 1.
-
-## Completed: 0.5.3 structured diagnostics
-
-- Added a persistent-in-tab health badge and diagnostics dialog for runtime,
-  storage, save, migration, recovery, and import state.
-- Added bounded session history, last-observed-save state, stable diagnostic
-  codes, and local technical details.
-- Added a privacy-safe diagnostics export that contains operational metadata
-  and counts without project content or identifiers.
-
-## Priority 1: 0.5.x usability hardening
-
-- Broader browser compatibility, cache behavior, and offline behavior.
-- Terminal-newline presentation cleanup and additional keyboard ergonomics.
-
-Compatible fixes and hardening advance the patch version. The exact target is
-set when each implementation scope is accepted.
-
-## Priority 2: 0.6.x and later capabilities
-
-- Cross-file CALL and direct-transfer execution traces.
-- ZIP-based `.batflow` containers with nested paths.
-- Undo/redo, generated-source diff, and durable edit history.
-- Saved scenarios, assertions, and branch exploration.
-- Explicit label operations, drag ordering, and command insertion.
-- Limited visual CONFIG.SYS editing and additional verified interpreter
-  features.
-
-New user-facing capability milestones advance the minor version.
-
-## Toward 1.0.0
-
-`1.0.0` is the first formally tagged and published release. It represents a
-deliberate compatibility and data-fidelity commitment, including stable
-project/storage migrations, documented interpreter behavior, lossless
-supported-file handling, sustained CI, and successful human verification of a
-usable application.
+- One task ID and one user-visible or architectural outcome per pull request.
+- Update this table in the task pull request; completed work does not remain in
+  a narrative backlog.
+- Run unit, Firefox, Chromium, accessibility, performance, and static-host
+  checks before merge.
+- Include screenshots for visual changes and performance deltas for parser,
+  layout, renderer, or simulator changes.
+- Resolve every review thread before merge. The final integration pull request
+  targets `main` only after BF-001 through BF-008 are complete.
