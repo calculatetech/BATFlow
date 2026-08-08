@@ -10,7 +10,7 @@ test("loads, simulates, edits, and keeps actions fixed", async ({
 }, testInfo) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "BATFlow" })).toBeVisible();
-  await expect(page.getByText("0.6.0 development")).toBeVisible();
+  await expect(page.getByText("0.6.0", { exact: true })).toBeVisible();
 
   await page.locator("#fileInput").setInputFiles([
     {
