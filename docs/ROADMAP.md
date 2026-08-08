@@ -12,8 +12,8 @@ and must pass the required `verify` check before merge.
 | BF-004 | Link CONFIG.SYS, AUTOEXEC.BAT, and reachable batch files.                   | Complete  | [#11](https://github.com/calculatetech/BATFlow/pull/11) |
 | BF-005 | Render the complete program as a pannable, zoomable 2D graph.               | Complete  | [#12](https://github.com/calculatetech/BATFlow/pull/12) |
 | BF-006 | Select active paths with in-block inputs and show executed code.            | Complete  | [#13](https://github.com/calculatetech/BATFlow/pull/13) |
-| BF-007 | Enforce browser, accessibility, visual, and performance acceptance.         | In review | [#14](https://github.com/calculatetech/BATFlow/pull/14) |
-| BF-008 | Cut over the reviewed 0.6.0 application to `main`.                          | Planned   | —                                                       |
+| BF-007 | Enforce browser, accessibility, visual, and performance acceptance.         | Complete  | [#14](https://github.com/calculatetech/BATFlow/pull/14) |
+| BF-008 | Cut over the reviewed 0.6.0 application to `main`.                          | In review | [#15](https://github.com/calculatetech/BATFlow/pull/15) |
 
 ## Product boundary
 
