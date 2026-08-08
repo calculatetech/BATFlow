@@ -105,8 +105,10 @@ export function simulate(program, scenario = {}) {
         );
       } else if (statement.kind === "shift") {
         setArguments(runtime, runtime.arguments.slice(1));
-      } else if (["choice", "external", "pipeline"].includes(statement.kind)) {
-        runtime.errorlevel = Number(input.errorlevel ?? input.choice ?? 0);
+      } else if (statement.kind === "choice") {
+        runtime.errorlevel = Number(input.choice ?? 1);
+      } else if (["external", "pipeline"].includes(statement.kind)) {
+        runtime.errorlevel = Number(input.errorlevel ?? 0);
       }
     }
     if (node.kind === "config") runtime.environment.config = node.data.config;
