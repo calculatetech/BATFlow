@@ -111,6 +111,30 @@ test("renders 2,000 lines within the desktop budget", async ({ page }) => {
   }
 });
 
+test("places a shared exit below its late forward caller", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/");
+  await page.locator("#fileInput").setInputFiles({
+    name: "AUTOEXEC.BAT",
+    mimeType: "text/plain",
+    buffer: Buffer.from(
+      '@echo off\r\nif "%EARLY%"=="1" goto exit\r\necho Stage one\r\nif "%NEXT%"=="1" goto middle\r\necho Stage two\r\n:middle\r\necho Near bottom\r\ngoto exit\r\n:exit\r\nexit\r\n',
+    ),
+  });
+
+  const caller = await page.locator(".flow-node.jump").boundingBox();
+  const exit = await page.locator(".flow-node.exit").boundingBox();
+  expect(exit.y).toBeGreaterThan(caller.y);
+  if (testInfo.project.name === "firefox") {
+    await page.getByRole("button", { name: "Fit graph" }).click();
+    await expect(page).toHaveScreenshot("source-order-layout.png", {
+      animations: "disabled",
+      maxDiffPixelRatio: 0.01,
+    });
+  }
+});
+
 test("reports and clears a confirmed infinite loop", async ({
   page,
 }, testInfo) => {

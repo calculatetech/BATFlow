@@ -15,6 +15,7 @@ Each completed task has one outcome, landed through a pull request into
 | BF-007 | Enforce browser, accessibility, visual, and performance acceptance.         | Complete           | [#14](https://github.com/calculatetech/BATFlow/pull/14) |
 | BF-008 | Cut over the reviewed 0.6.0 application to `main`.                          | Complete           | [#15](https://github.com/calculatetech/BATFlow/pull/15) |
 | BF-009 | Stop confirmed infinite simulations after one cycle and warn at source.     | Human verification | —                                                       |
+| BF-010 | Keep graph rows near same-file source order without flattening branches.    | Human verification | —                                                       |
 
 ## Product boundary
 

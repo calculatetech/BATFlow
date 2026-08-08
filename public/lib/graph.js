@@ -24,6 +24,31 @@ export function layoutGraph(program) {
     if (!rank.has(node.id)) rank.set(node.id, ++lastRank);
   }
 
+  for (const node of program.nodes
+    .filter((item) => item.file && Number.isFinite(item.startLine))
+    .sort(
+      (left, right) =>
+        left.file.localeCompare(right.file) || left.startLine - right.startLine,
+    )) {
+    for (const edge of outgoing.get(node.id) || []) {
+      const target = nodesById.get(edge.to);
+      if (
+        target?.file !== node.file ||
+        !Number.isFinite(target.startLine) ||
+        target.startLine <= node.startLine
+      )
+        continue;
+      rank.set(target.id, Math.max(rank.get(target.id), rank.get(node.id) + 1));
+    }
+  }
+
+  const compactRank = new Map(
+    [...new Set(rank.values())]
+      .sort((left, right) => left - right)
+      .map((value, index) => [value, index]),
+  );
+  for (const [id, value] of rank) rank.set(id, compactRank.get(value));
+
   const rows = new Map();
   for (const node of program.nodes) {
     const row = rank.get(node.id);
@@ -50,7 +75,7 @@ export function layoutGraph(program) {
   return {
     positions,
     width,
-    height: 92 + rows.size * (NODE_HEIGHT + Y_GAP),
+    height: 92 + (Math.max(-1, ...rows.keys()) + 1) * (NODE_HEIGHT + Y_GAP),
   };
 }
 
