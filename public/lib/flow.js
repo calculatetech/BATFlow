@@ -495,7 +495,7 @@ export function buildProgram(sourceValues, requestedEntry = "") {
   let config = null;
   let configChoices = [];
   let defaultConfig = "";
-  if (configKey) {
+  if (configKey && entryKey === autoexecKey) {
     config = parseConfig(sources.get(configKey));
     diagnostics.push(
       ...config.diagnostics.map((item) => ({
