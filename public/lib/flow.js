@@ -461,7 +461,9 @@ export function buildProgram(sourceValues, requestedEntry = "") {
         if (returnEdge) edges.splice(edges.indexOf(returnEdge), 1);
       } else {
         const actionEdge = edges.find(
-          (item) => item.from === node.id && item.role === "true",
+          (item) =>
+            item.from === node.id &&
+            item.role === (node.kind === "loop" ? "loop" : "true"),
         );
         continuation = actionEdge?.to || null;
         if (actionEdge) edges.splice(edges.indexOf(actionEdge), 1);
