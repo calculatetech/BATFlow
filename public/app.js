@@ -4,7 +4,8 @@ import {
   serializeSource,
 } from "./lib/source.js?v=0.6.0";
 import { buildProgram } from "./lib/flow.js?v=0.6.0";
-import { mountGraph } from "./lib/graph.js?v=0.6.0";
+import { applySimulation, mountGraph } from "./lib/graph.js?v=0.6.0";
+import { simulate } from "./lib/simulate.js?v=0.6.0";
 
 const $ = (id) => document.getElementById(id);
 const state = {
@@ -15,6 +16,8 @@ const state = {
   revision: 0,
   program: null,
   graphRevision: -1,
+  scenario: {},
+  run: null,
 };
 let rebuildTimer;
 
@@ -91,22 +94,55 @@ function renderSource() {
 
 function rebuildProgram() {
   state.program = buildProgram(state.files, state.entry);
+  state.run = simulate(state.program, state.scenario);
   state.revision += 1;
   if (state.view === "flow") renderFlow();
 }
 
 function renderFlow() {
   if (state.graphRevision === state.revision) return;
-  mountGraph(
-    $("flowView"),
-    state.program || buildProgram(state.files, state.entry),
-  );
+  const program = state.program || buildProgram(state.files, state.entry);
+  state.run ||= simulate(program, state.scenario);
+  mountGraph($("flowView"), program, state.scenario, updateSimulation);
+  applySimulation($("flowView"), state.run);
   state.graphRevision = state.revision;
+}
+
+function updateSimulation() {
+  state.run = simulate(state.program, state.scenario);
+  applySimulation($("flowView"), state.run);
+  renderExecuted();
+}
+
+function renderExecuted() {
+  const rows = state.run?.executed || [];
+  if (!rows.length) {
+    $("executedView").innerHTML =
+      '<div class="placeholder"><strong>No execution yet</strong><span>Open a batch program to simulate it.</span></div>';
+    return;
+  }
+  const table = document.createElement("table");
+  table.className = "executed-code";
+  table.innerHTML =
+    "<thead><tr><th>Location</th><th>Executed source</th></tr></thead>";
+  const body = document.createElement("tbody");
+  for (const row of rows) {
+    const tr = document.createElement("tr");
+    const location = document.createElement("td");
+    const source = document.createElement("td");
+    location.textContent = `${row.file}:${row.line}`;
+    source.textContent = row.source;
+    tr.append(location, source);
+    body.append(tr);
+  }
+  table.append(body);
+  $("executedView").replaceChildren(table);
 }
 
 function render() {
   renderFiles();
   renderSource();
+  renderExecuted();
   if (state.view === "flow") renderFlow();
   const file = selectedFile();
   $("currentPath").textContent = file
@@ -214,6 +250,8 @@ $("resetSession").addEventListener("click", () => {
   state.revision += 1;
   state.program = null;
   state.graphRevision = -1;
+  state.scenario = {};
+  state.run = null;
   setMessage("Session reset");
   render();
 });

@@ -80,6 +80,7 @@ export function buildBatchFlow(parsed) {
       startLine: first.line,
       endLine: last.line,
       lines: process.map((statement) => statement.raw),
+      lineNumbers: process.map((statement) => statement.line),
       labels: pendingLabels.splice(0),
       statements: process,
       data: {},
@@ -109,6 +110,7 @@ export function buildBatchFlow(parsed) {
       startLine: statement.line,
       endLine: statement.line,
       lines: [statement.raw],
+      lineNumbers: [statement.line],
       labels: pendingLabels.splice(0),
       statements: [statement],
       data: statement.data,
@@ -184,7 +186,6 @@ export function buildBatchFlow(parsed) {
       continue;
     }
     if (node.kind === "exit") {
-      edges.push(edge(node.id, endId, "exit", "Exit"));
       continue;
     }
     if (node.kind === "transfer") continue;
@@ -295,6 +296,7 @@ function configNode(config, choice) {
     startLine: 1,
     endLine: config.lines.length,
     lines: execution.lines.map((line) => line.raw),
+    lineNumbers: execution.lines.map((line) => line.line),
     labels: [`[${choice.value || "COMMON"}]`],
     data: { config: choice.value || "", key: choice.key || "" },
   };
@@ -461,7 +463,9 @@ export function buildProgram(sourceValues, requestedEntry = "") {
         if (returnEdge) edges.splice(edges.indexOf(returnEdge), 1);
       } else {
         const actionEdge = edges.find(
-          (item) => item.from === node.id && item.role === "true",
+          (item) =>
+            item.from === node.id &&
+            item.role === (node.kind === "loop" ? "loop" : "true"),
         );
         continuation = actionEdge?.to || null;
         if (actionEdge) edges.splice(edges.indexOf(actionEdge), 1);
@@ -490,7 +494,7 @@ export function buildProgram(sourceValues, requestedEntry = "") {
   let config = null;
   let configChoices = [];
   let defaultConfig = "";
-  if (configKey) {
+  if (configKey && entryKey === autoexecKey) {
     config = parseConfig(sources.get(configKey));
     diagnostics.push(
       ...config.diagnostics.map((item) => ({

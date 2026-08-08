@@ -16,12 +16,16 @@ test("loads, edits, switches views, and exposes fixed session actions", async ({
     {
       name: "AUTOEXEC.BAT",
       mimeType: "text/plain",
-      buffer: Buffer.from("@echo off\r\nif exist C:\\NET goto network\r\n"),
+      buffer: Buffer.from(
+        "@echo off\r\nif exist C:\\NET goto network\r\necho Local\r\ngoto end\r\n:network\r\necho Network\r\n:end\r\necho Done\r\n",
+      ),
     },
     {
       name: "CONFIG.SYS",
       mimeType: "text/plain",
-      buffer: Buffer.from("[menu]\r\nmenuitem=network,Network\r\n"),
+      buffer: Buffer.from(
+        "[menu]\r\nmenuitem=network,Network\r\n[network]\r\ndos=high\r\n",
+      ),
     },
   ]);
 
@@ -29,6 +33,10 @@ test("loads, edits, switches views, and exposes fixed session actions", async ({
   await expect(page.locator("#currentPath")).toContainText("entry");
   await expect(page.locator(".flow-node")).not.toHaveCount(0);
   await expect(page.getByRole("button", { name: "Fit graph" })).toBeVisible();
+  await page.locator(".flow-node.decision select").selectOption("yes");
+  await page.getByRole("button", { name: "Executed code" }).click();
+  await expect(page.locator(".executed-code")).toContainText("echo Network");
+  await expect(page.locator(".executed-code")).not.toContainText("echo Local");
   await page.getByRole("button", { name: "Source", exact: true }).click();
   await page.locator("#sourceEditor").fill("@echo off\nset MODE=TEST\n");
   await expect(page.locator("#currentPath")).toContainText("modified");

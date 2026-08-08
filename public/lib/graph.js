@@ -61,7 +61,120 @@ function element(name, className, text = "") {
   return result;
 }
 
-function graphNode(node, position) {
+function inputFor(node, program, scenario, onChange) {
+  const input = scenario[node.id] || {};
+  const update = (name, value) => {
+    scenario[node.id] = { ...input, [name]: value };
+    onChange();
+  };
+  const wrap = element("label", "node-input");
+  let control;
+  if (node.kind === "start") {
+    wrap.append("Arguments");
+    control = document.createElement("input");
+    control.placeholder = "one two";
+    control.value = input.args || "";
+    control.addEventListener("input", () => update("args", control.value));
+  } else if (node.kind === "menu") {
+    wrap.append("Selection");
+    control = document.createElement("select");
+    for (const edge of program.edges.filter((item) => item.from === node.id)) {
+      const option = document.createElement("option");
+      option.value = edge.value;
+      option.textContent = edge.label;
+      option.selected = (input.selection || node.data.default) === edge.value;
+      control.append(option);
+    }
+    control.addEventListener("change", () =>
+      update("selection", control.value),
+    );
+  } else if (node.kind === "decision" && node.data.type === "exist") {
+    wrap.append(`Exists: ${node.data.operand}`);
+    control = document.createElement("select");
+    for (const [value, label] of [
+      ["", "No"],
+      ["yes", "Yes"],
+    ]) {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = label;
+      option.selected = Boolean(input.exists) === Boolean(value);
+      control.append(option);
+    }
+    control.addEventListener("change", () =>
+      update("exists", Boolean(control.value)),
+    );
+  } else if (node.kind === "decision" && node.data.type === "compare") {
+    wrap.append(node.data.left.match(/%([^%]+)%/)?.[1] || "Compared value");
+    control = document.createElement("input");
+    control.value = input.value || "";
+    control.addEventListener("input", () => update("value", control.value));
+  } else if (node.kind === "decision" && node.data.type === "errorlevel") {
+    wrap.append("Current ERRORLEVEL");
+    control = document.createElement("input");
+    control.type = "number";
+    control.min = "0";
+    control.value = input.errorlevel || "0";
+    control.addEventListener("input", () =>
+      update("errorlevel", control.value),
+    );
+  } else if (node.kind === "outcome") {
+    wrap.append(node.statementKind === "choice" ? "Choice" : "ERRORLEVEL");
+    if (node.statementKind === "choice") {
+      control = document.createElement("select");
+      node.data.choices.forEach((choice, index) => {
+        const option = document.createElement("option");
+        option.value = String(index + 1);
+        option.textContent = choice;
+        control.append(option);
+      });
+      control.value = input.choice || "1";
+      control.addEventListener("change", () => update("choice", control.value));
+    } else {
+      control = document.createElement("input");
+      control.type = "number";
+      control.min = "0";
+      control.value = input.errorlevel || "0";
+      control.addEventListener("input", () =>
+        update("errorlevel", control.value),
+      );
+    }
+  } else if (node.kind === "jump" && /%[^%]+%/.test(node.data.target)) {
+    wrap.append("Target label");
+    control = document.createElement("select");
+    for (const edge of program.edges.filter((item) => item.from === node.id)) {
+      const option = document.createElement("option");
+      option.value = edge.to;
+      option.textContent = edge.label;
+      control.append(option);
+    }
+    control.value = input.target || control.options[0]?.value || "";
+    control.addEventListener("change", () => update("target", control.value));
+  } else if (node.kind === "loop" && node.data.wildcard) {
+    wrap.append("Matched files");
+    control = document.createElement("input");
+    control.placeholder = "ONE.BAT TWO.BAT";
+    control.value = input.values || "";
+    control.addEventListener("input", () => update("values", control.value));
+  } else if (
+    node.kind === "process" &&
+    node.statements?.some((statement) => statement.kind === "external")
+  ) {
+    wrap.append("ERRORLEVEL");
+    control = document.createElement("input");
+    control.type = "number";
+    control.min = "0";
+    control.value = input.errorlevel || "0";
+    control.addEventListener("input", () =>
+      update("errorlevel", control.value),
+    );
+  }
+  if (!control) return null;
+  wrap.append(control);
+  return wrap;
+}
+
+function graphNode(node, position, program, scenario, onChange) {
   const article = element("article", `flow-node ${node.kind}`);
   article.dataset.node = node.id;
   article.tabIndex = 0;
@@ -92,6 +205,8 @@ function graphNode(node, position) {
   article.append(title);
   if (labels) article.append(labels);
   article.append(source);
+  const input = inputFor(node, program, scenario, onChange);
+  if (input) article.append(input);
   return article;
 }
 
@@ -108,7 +223,30 @@ function edgePath(from, to) {
   return `M ${startX} ${startY} C ${side} ${startY + 30}, ${side} ${endY - 30}, ${endX} ${endY}`;
 }
 
-export function mountGraph(root, program) {
+export function applySimulation(root, run) {
+  root.querySelectorAll("[data-node]").forEach((node) => {
+    node.classList.toggle(
+      "active-path",
+      run.activeNodes.has(node.dataset.node),
+    );
+    node.classList.toggle(
+      "inactive-path",
+      !run.activeNodes.has(node.dataset.node),
+    );
+  });
+  root.querySelectorAll("[data-edge]").forEach((edge) => {
+    edge.classList.toggle(
+      "active-path",
+      run.activeEdges.has(edge.dataset.edge),
+    );
+    edge.classList.toggle(
+      "inactive-path",
+      !run.activeEdges.has(edge.dataset.edge),
+    );
+  });
+}
+
+export function mountGraph(root, program, scenario = {}, onChange = () => {}) {
   root.replaceChildren();
   if (!program.entryId || !program.nodes.length) {
     const empty = element("div", "placeholder");
@@ -142,9 +280,32 @@ export function mountGraph(root, program) {
     path.setAttribute("marker-end", "url(#arrow)");
     path.dataset.edge = edge.id;
     svg.append(path);
+    if (edge.label) {
+      const label = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "text",
+      );
+      label.setAttribute(
+        "x",
+        (from.x + from.width / 2 + to.x + to.width / 2) / 2,
+      );
+      label.setAttribute("y", (from.y + from.height + to.y) / 2 - 6);
+      label.setAttribute("class", "edge-label");
+      label.textContent = edge.label;
+      svg.append(label);
+    }
   }
-  for (const node of program.nodes)
-    layer.append(graphNode(node, layout.positions.get(node.id)));
+  for (const node of program.nodes) {
+    layer.append(
+      graphNode(
+        node,
+        layout.positions.get(node.id),
+        program,
+        scenario,
+        onChange,
+      ),
+    );
+  }
   scene.style.width = `${layout.width}px`;
   scene.style.height = `${layout.height}px`;
   scene.append(svg, layer);
@@ -157,11 +318,14 @@ export function mountGraph(root, program) {
     scene.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
     controls.querySelector("output").value = `${Math.round(scale * 100)}%`;
   };
-  const fit = () => {
-    scale = Math.min(
-      1,
-      (root.clientWidth - 48) / layout.width,
-      (root.clientHeight - 48) / layout.height,
+  const fit = (minimum = 0.25) => {
+    scale = Math.max(
+      minimum,
+      Math.min(
+        1,
+        (root.clientWidth - 48) / layout.width,
+        (root.clientHeight - 48) / layout.height,
+      ),
     );
     x = (root.clientWidth - layout.width * scale) / 2;
     y = 24;
@@ -210,5 +374,5 @@ export function mountGraph(root, program) {
     { passive: false },
   );
   root.append(viewport, controls);
-  requestAnimationFrame(fit);
+  requestAnimationFrame(() => fit(0.75));
 }

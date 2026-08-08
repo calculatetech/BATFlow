@@ -306,15 +306,46 @@ button:disabled {
   fill: #778087;
 }
 
+.edge-label {
+  fill: var(--muted);
+  stroke: var(--window);
+  stroke-width: 4px;
+  paint-order: stroke;
+  text-anchor: middle;
+  font:
+    12px/1 system-ui,
+    sans-serif;
+}
+
 .flow-node {
   position: absolute;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   overflow: hidden;
   background: var(--panel);
   border: 1px solid #596168;
   border-radius: 5px;
   box-shadow: 0 4px 14px rgb(0 0 0 / 28%);
+}
+
+.flow-node.inactive-path {
+  opacity: 0.46;
+}
+
+.flow-node.active-path {
+  border-color: #6dcff6;
+  box-shadow:
+    0 0 0 1px rgb(61 174 233 / 45%),
+    0 4px 14px rgb(0 0 0 / 28%);
+}
+
+.flow-edge.inactive-path {
+  opacity: 0.22;
+}
+
+.flow-edge.active-path {
+  stroke: #6dcff6;
+  stroke-width: 3;
 }
 
 .flow-node:focus {
@@ -377,6 +408,60 @@ button:disabled {
     "Cascadia Mono",
     "Liberation Mono",
     monospace;
+}
+
+.node-input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(100px, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  color: var(--muted);
+  font-size: 13px;
+  background: #1d2023;
+  border-top: 1px solid var(--border-soft);
+}
+
+.node-input input,
+.node-input select {
+  min-width: 0;
+  height: 31px;
+  padding: 3px 6px;
+  color: var(--text);
+  background: var(--field);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+
+.executed-code {
+  width: 100%;
+  border-collapse: collapse;
+  font:
+    14px/1.45 ui-monospace,
+    "Cascadia Mono",
+    "Liberation Mono",
+    monospace;
+}
+
+.executed-code th,
+.executed-code td {
+  padding: 9px 14px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.executed-code th {
+  position: sticky;
+  top: 0;
+  color: var(--muted);
+  background: #202326;
+}
+
+.executed-code td:first-child {
+  width: 240px;
+  color: var(--muted);
+  white-space: nowrap;
 }
 
 .graph-controls {
