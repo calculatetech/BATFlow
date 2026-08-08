@@ -15,6 +15,7 @@ test("in-block decisions select a path without changing graph topology", () => {
           "AUTOEXEC.BAT",
           [
             'if "%MODE%"=="NET" goto net',
+            "rem keep source locations exact",
             "echo local",
             "goto end",
             ":net",
@@ -53,6 +54,10 @@ test("in-block decisions select a path without changing graph topology", () => {
   assert.match(
     network.executed.map((row) => row.source).join("\n"),
     /echo returned/,
+  );
+  assert.equal(
+    local.executed.find((row) => row.source === "echo local").line,
+    3,
   );
   assert.equal(program.edges.length, edgeCount);
 });

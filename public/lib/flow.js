@@ -80,6 +80,7 @@ export function buildBatchFlow(parsed) {
       startLine: first.line,
       endLine: last.line,
       lines: process.map((statement) => statement.raw),
+      lineNumbers: process.map((statement) => statement.line),
       labels: pendingLabels.splice(0),
       statements: process,
       data: {},
@@ -109,6 +110,7 @@ export function buildBatchFlow(parsed) {
       startLine: statement.line,
       endLine: statement.line,
       lines: [statement.raw],
+      lineNumbers: [statement.line],
       labels: pendingLabels.splice(0),
       statements: [statement],
       data: statement.data,
@@ -295,6 +297,7 @@ function configNode(config, choice) {
     startLine: 1,
     endLine: config.lines.length,
     lines: execution.lines.map((line) => line.raw),
+    lineNumbers: execution.lines.map((line) => line.line),
     labels: [`[${choice.value || "COMMON"}]`],
     data: { config: choice.value || "", key: choice.key || "" },
   };
