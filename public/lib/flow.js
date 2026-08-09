@@ -1,11 +1,11 @@
-import { norm, parseBatch, parseCommand } from "./batch.js?v=0.6.0";
+import { norm, parseBatch, parseCommand } from "./batch.js?v=0.6.3";
 import {
   configExecution,
   menuDefault,
   menuLeaves,
   parseConfig,
-} from "./config.js?v=0.6.0";
-import { pathKey } from "./source.js?v=0.6.0";
+} from "./config.js?v=0.6.3";
+import { pathKey } from "./source.js?v=0.6.3";
 
 const CONTROL_KINDS = new Set([
   "call",
@@ -19,6 +19,23 @@ const CONTROL_KINDS = new Set([
   "shell-transfer",
   "transfer",
   "unsupported",
+]);
+
+const NONLINEAR_ROLES = new Set([
+  "call",
+  "case",
+  "jump",
+  "loop",
+  "return",
+  "transfer",
+]);
+const NONLINEAR_ACTIONS = new Set([
+  "call",
+  "exit",
+  "goto",
+  "shell-call",
+  "shell-transfer",
+  "transfer",
 ]);
 
 function nodeKind(statement) {
@@ -37,8 +54,14 @@ function nodeKind(statement) {
   }[statement.kind];
 }
 
-function edge(from, to, role = "next", label = "") {
-  return { id: `${from}->${to}:${role}`, from, to, role, label };
+function edge(
+  from,
+  to,
+  role = "next",
+  label = "",
+  nonlinear = NONLINEAR_ROLES.has(role),
+) {
+  return { id: `${from}->${to}:${role}`, from, to, role, label, nonlinear };
 }
 
 function targetForAction(action, labelNodes, endId) {
@@ -166,12 +189,21 @@ export function buildBatchFlow(parsed) {
       continue;
     }
     if (node.kind === "decision") {
+      const actionKind = parseCommand(statement.data.action).kind;
       const actionTarget = targetForAction(
         statement.data.action,
         labelNodes,
         endId,
       );
-      edges.push(edge(node.id, actionTarget || nextId, "true", "True"));
+      edges.push(
+        edge(
+          node.id,
+          actionTarget || nextId,
+          "true",
+          "True",
+          NONLINEAR_ACTIONS.has(actionKind),
+        ),
+      );
       edges.push(edge(node.id, nextId, "false", "False"));
       continue;
     }
@@ -339,6 +371,7 @@ function addMenus(config, nodes, edges, autoexecStart) {
           role: "case",
           label: item.text,
           value: item.key,
+          nonlinear: true,
         });
       } else {
         const choice = leaves.find((leaf) => leaf.key === item.key) || {
@@ -355,6 +388,7 @@ function addMenus(config, nodes, edges, autoexecStart) {
           role: "case",
           label: item.text,
           value: item.key,
+          nonlinear: true,
         });
         if (autoexecStart) {
           edges.push({
@@ -364,6 +398,7 @@ function addMenus(config, nodes, edges, autoexecStart) {
             role: "boot",
             label: "AUTOEXEC.BAT",
             config: item.target,
+            nonlinear: false,
           });
         }
       }
@@ -476,6 +511,7 @@ export function buildProgram(sourceValues, requestedEntry = "") {
         to: targetFlow.entryId,
         role,
         label: reference.target,
+        nonlinear: true,
       });
       if (reference.kind === "call" && continuation) {
         edges.push({
@@ -485,6 +521,7 @@ export function buildProgram(sourceValues, requestedEntry = "") {
           role: "return",
           label: `Return to ${node.file}:${node.startLine}`,
           callSite: node.id,
+          nonlinear: true,
         });
       }
     }
@@ -523,6 +560,7 @@ export function buildProgram(sourceValues, requestedEntry = "") {
           role: "boot",
           label: "AUTOEXEC.BAT",
           config: "",
+          nonlinear: false,
         });
       }
       entryId = common.id;

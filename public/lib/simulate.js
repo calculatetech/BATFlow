@@ -1,4 +1,4 @@
-import { expand, norm, parseCommand, splitArgs } from "./batch.js?v=0.6.0";
+import { expand, norm, parseCommand, splitArgs } from "./batch.js?v=0.6.3";
 
 function setArguments(runtime, values) {
   for (let index = 1; index <= 9; index += 1) {

@@ -95,6 +95,53 @@ test("straight-line commands become one process block while branches remain 2D n
     flow.edges.filter((item) => item.from === flow.nodes[2].id).length,
     2,
   );
+  assert.equal(
+    flow.edges.find(
+      (item) => item.from === flow.nodes[2].id && item.role === "true",
+    ).nonlinear,
+    true,
+  );
+  assert.equal(
+    flow.edges.find(
+      (item) => item.from === flow.nodes[2].id && item.role === "false",
+    ).nonlinear,
+    false,
+  );
+});
+
+test("a GOTO remains non-linear when its target is the following block", () => {
+  const flow = buildBatchFlow(
+    parseBatch(source('if "1"=="1" goto next\n:next\necho done')),
+  );
+  const decision = flow.nodes.find((node) => node.kind === "decision");
+  const branches = flow.edges.filter((item) => item.from === decision.id);
+
+  assert.equal(branches[0].to, branches[1].to);
+  assert.deepEqual(
+    branches.map((item) => item.nonlinear),
+    [true, false],
+  );
+
+  const unresolvedCall = buildBatchFlow(
+    parseBatch(source('if "1"=="1" call MISSING.BAT')),
+  );
+  assert.equal(
+    unresolvedCall.edges.find((item) => item.role === "true").nonlinear,
+    true,
+  );
+
+  const linearIf = buildBatchFlow(
+    parseBatch(source('if "1"=="1" echo unchanged')),
+  );
+  assert.ok(linearIf.edges.every((item) => !item.nonlinear));
+
+  const conditionalExit = buildBatchFlow(
+    parseBatch(source("if errorlevel 1 exit")),
+  );
+  assert.equal(
+    conditionalExit.edges.find((item) => item.role === "true").nonlinear,
+    true,
+  );
 });
 
 test("loops, literal jumps, and dynamic jumps expose every possible edge", () => {
@@ -119,8 +166,19 @@ test("loops, literal jumps, and dynamic jumps expose every possible edge", () =>
   );
   assert.deepEqual(
     flow.edges
+      .filter((item) => item.from === loop.id)
+      .map((item) => item.nonlinear),
+    [true, false],
+  );
+  assert.deepEqual(
+    flow.edges
       .filter((item) => item.from === jump.id)
       .map((item) => item.label),
     [":one", ":two"],
+  );
+  assert.ok(
+    flow.edges
+      .filter((item) => item.from === jump.id)
+      .every((item) => item.nonlinear),
   );
 });

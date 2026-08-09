@@ -2,10 +2,10 @@ import {
   highlightSource,
   readSourceFiles,
   serializeSource,
-} from "./lib/source.js?v=0.6.0";
-import { buildProgram } from "./lib/flow.js?v=0.6.0";
-import { applySimulation, mountGraph } from "./lib/graph.js?v=0.6.0";
-import { simulate } from "./lib/simulate.js?v=0.6.0";
+} from "./lib/source.js?v=0.6.3";
+import { buildProgram } from "./lib/flow.js?v=0.6.3";
+import { applySimulation, mountGraph } from "./lib/graph.js?v=0.6.3";
+import { simulate } from "./lib/simulate.js?v=0.6.3";
 
 const $ = (id) => document.getElementById(id);
 const state = {

@@ -4,18 +4,20 @@ BATFlow 0.6.0 was rebuilt as a static, client-side MS-DOS 7.1 flow visualizer.
 Each completed task has one outcome, landed through a pull request into
 `rebuild/0.6.0`, and passed the required `verify` check before merge.
 
-| Task   | Outcome                                                                     | Status             | Pull request                                            |
-| ------ | --------------------------------------------------------------------------- | ------------------ | ------------------------------------------------------- |
-| BF-001 | Lock the rebuild contract and delivery rules.                               | Complete           | [#8](https://github.com/calculatetech/BATFlow/pull/8)   |
-| BF-002 | Replace the application with a memory-only source session and Breeze shell. | Complete           | [#9](https://github.com/calculatetech/BATFlow/pull/9)   |
-| BF-003 | Build the batch parser and control-flow graph.                              | Complete           | [#10](https://github.com/calculatetech/BATFlow/pull/10) |
-| BF-004 | Link CONFIG.SYS, AUTOEXEC.BAT, and reachable batch files.                   | Complete           | [#11](https://github.com/calculatetech/BATFlow/pull/11) |
-| BF-005 | Render the complete program as a pannable, zoomable 2D graph.               | Complete           | [#12](https://github.com/calculatetech/BATFlow/pull/12) |
-| BF-006 | Select active paths with in-block inputs and show executed code.            | Complete           | [#13](https://github.com/calculatetech/BATFlow/pull/13) |
-| BF-007 | Enforce browser, accessibility, visual, and performance acceptance.         | Complete           | [#14](https://github.com/calculatetech/BATFlow/pull/14) |
-| BF-008 | Cut over the reviewed 0.6.0 application to `main`.                          | Complete           | [#15](https://github.com/calculatetech/BATFlow/pull/15) |
-| BF-009 | Stop confirmed infinite simulations after one cycle and warn at source.     | Human verification | —                                                       |
-| BF-010 | Keep graph rows near same-file source order without flattening branches.    | Human verification | —                                                       |
+| Task   | Outcome                                                                                                            | Status             | Pull request                                            |
+| ------ | ------------------------------------------------------------------------------------------------------------------ | ------------------ | ------------------------------------------------------- |
+| BF-001 | Lock the rebuild contract and delivery rules.                                                                      | Complete           | [#8](https://github.com/calculatetech/BATFlow/pull/8)   |
+| BF-002 | Replace the application with a memory-only source session and Breeze shell.                                        | Complete           | [#9](https://github.com/calculatetech/BATFlow/pull/9)   |
+| BF-003 | Build the batch parser and control-flow graph.                                                                     | Complete           | [#10](https://github.com/calculatetech/BATFlow/pull/10) |
+| BF-004 | Link CONFIG.SYS, AUTOEXEC.BAT, and reachable batch files.                                                          | Complete           | [#11](https://github.com/calculatetech/BATFlow/pull/11) |
+| BF-005 | Render the complete program as a pannable, zoomable 2D graph.                                                      | Complete           | [#12](https://github.com/calculatetech/BATFlow/pull/12) |
+| BF-006 | Select active paths with in-block inputs and show executed code.                                                   | Complete           | [#13](https://github.com/calculatetech/BATFlow/pull/13) |
+| BF-007 | Enforce browser, accessibility, visual, and performance acceptance.                                                | Complete           | [#14](https://github.com/calculatetech/BATFlow/pull/14) |
+| BF-008 | Cut over the reviewed 0.6.0 application to `main`.                                                                 | Complete           | [#15](https://github.com/calculatetech/BATFlow/pull/15) |
+| BF-009 | Stop confirmed infinite simulations after one cycle and warn at source.                                            | Human verification | —                                                       |
+| BF-010 | Keep graph rows near same-file source order without flattening branches.                                           | Human verification | —                                                       |
+| BF-011 | Make graph navigation predictable and block content and loops legible.                                             | Human verification | —                                                       |
+| BF-012 | Open every block from a pencil action in independently draggable, resizable, scrollable source overlays for 0.7.0. | Planned            | —                                                       |
 
 ## Product boundary
 
@@ -30,7 +32,8 @@ Each completed task has one outcome, landed through a pull request into
 
 BATFlow is not an IDE, project database, version-control system, diff tool,
 backend service, or offline application. It has no named projects, browser
-persistence, service worker, edit history, block editor, or project container.
+persistence, service worker, edit history, visual block construction, or
+project container.
 
 ## Delivery rules
 
@@ -43,3 +46,5 @@ persistence, service worker, edit history, block editor, or project container.
   layout, renderer, or simulator changes.
 - Resolve every review thread before merge. The final integration pull request
   targets `main` only after BF-001 through BF-008 are complete.
+- Increment the third version digit for bug fixes. Increment the second digit
+  and reset the third to zero for major features.
