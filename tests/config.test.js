@@ -133,6 +133,30 @@ test("the program links CONFIG to AUTOEXEC and only reachable called files", () 
   assert.ok(program.edges.some((item) => item.role === "boot"));
   assert.ok(program.edges.some((item) => item.role === "call"));
   assert.ok(program.edges.some((item) => item.role === "return"));
+  assert.ok(
+    program.edges
+      .filter((item) => ["case", "call", "return"].includes(item.role))
+      .every((item) => item.nonlinear),
+  );
+  assert.ok(
+    program.edges
+      .filter((item) => item.role === "boot")
+      .every((item) => !item.nonlinear),
+  );
+});
+
+test("batch transfers are marked as non-linear control flow", () => {
+  const program = buildProgram(
+    new Map([
+      ["autoexec.bat", source("AUTOEXEC.BAT", "CHILD.BAT")],
+      ["child.bat", source("CHILD.BAT", "echo child")],
+    ]),
+  );
+
+  assert.equal(
+    program.edges.find((item) => item.role === "transfer").nonlinear,
+    true,
+  );
 });
 
 test("an explicitly selected non-AUTOEXEC entry bypasses the boot pair", () => {

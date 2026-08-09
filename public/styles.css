@@ -270,6 +270,11 @@ button:disabled {
   overflow: hidden;
   cursor: grab;
   touch-action: none;
+  user-select: none;
+}
+
+.graph-viewport input {
+  user-select: text;
 }
 
 .graph-viewport:active {
@@ -295,8 +300,6 @@ button:disabled {
   stroke-width: 2;
 }
 
-.flow-edge.true,
-.flow-edge.call,
 .flow-edge.boot {
   stroke: var(--accent);
 }
@@ -306,14 +309,13 @@ button:disabled {
   stroke-dasharray: 7 5;
 }
 
-.flow-edge.jump,
-.flow-edge.loop,
-.flow-edge.return {
+.flow-edge.nonlinear {
   stroke: #a78bda;
 }
 
 .edge-layer marker path {
   fill: #778087;
+  fill: context-stroke;
 }
 
 .edge-label {
@@ -356,6 +358,10 @@ button:disabled {
 .flow-edge.active-path {
   stroke: #6dcff6;
   stroke-width: 3;
+}
+
+.flow-edge.nonlinear.active-path {
+  stroke: #a78bda;
 }
 
 .flow-node:focus {
@@ -427,6 +433,7 @@ button:disabled {
 }
 
 .node-source {
+  grid-row: 3;
   margin: 0;
   padding: 8px 10px 10px;
   overflow: auto;
@@ -440,6 +447,7 @@ button:disabled {
 }
 
 .node-input {
+  grid-row: 4;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(100px, 1fr);
   align-items: center;

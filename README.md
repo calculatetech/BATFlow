@@ -1,6 +1,6 @@
 # BATFlow
 
-BATFlow 0.6.0 is a static, client-side visualizer for MS-DOS 7.1 batch logic.
+BATFlow 0.6.3 is a static, client-side visualizer for MS-DOS 7.1 batch logic.
 Load BAT and CONFIG.SYS files, inspect the complete 2D control-flow graph, set
 simulation inputs inside the relevant blocks, and review the executed source
 path. Nothing is uploaded or saved in browser storage.

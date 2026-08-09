@@ -1,4 +1,4 @@
-import { norm } from "./batch.js?v=0.6.0";
+import { norm } from "./batch.js?v=0.6.3";
 
 function parseAssignment(raw) {
   const match = raw.trim().match(/^([^=\s]+)\s*=\s*(.*)$/);

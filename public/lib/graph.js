@@ -1,7 +1,10 @@
-const NODE_WIDTH = 320;
-const NODE_HEIGHT = 154;
+const NODE_WIDTH = 400;
+const NODE_HEIGHT = 190;
 const X_GAP = 80;
 const Y_GAP = 82;
+const LOOP_LANE = X_GAP / 2;
+const EDGE_TAIL = 10;
+const RETURN_SEPARATION = 12;
 
 export function layoutGraph(program) {
   const nodesById = new Map(program.nodes.map((node) => [node.id, node]));
@@ -236,17 +239,83 @@ function graphNode(node, position, program, scenario, onChange) {
   return article;
 }
 
-function edgePath(from, to) {
+function loopSide(from, to, positions) {
+  const startX = from.x + from.width / 2;
+  const endX = to.x + to.width / 2;
+  if (startX !== endX) return startX < endX ? "left" : "right";
+
+  const clearance = (x) => {
+    let result = Infinity;
+    // ponytail: linear scan is enough for small batch graphs; index positions if dense-loop benchmarks fail.
+    for (const position of positions) {
+      if (
+        position === from ||
+        position === to ||
+        position.y + position.height <= to.y ||
+        position.y >= from.y + from.height
+      )
+        continue;
+      result = Math.min(
+        result,
+        x < position.x
+          ? position.x - x
+          : x > position.x + position.width
+            ? x - position.x - position.width
+            : 0,
+      );
+    }
+    return result;
+  };
+  const left = to.x - LOOP_LANE;
+  const right = to.x + to.width + LOOP_LANE;
+  return clearance(left) > clearance(right) ? "left" : "right";
+}
+
+function clearLoopLane(lane, side, from, to, positions) {
+  let previous;
+  do {
+    previous = lane;
+    for (const position of positions) {
+      if (
+        position.y + position.height <= to.y ||
+        position.y >= from.y + from.height ||
+        lane <= position.x ||
+        lane >= position.x + position.width
+      )
+        continue;
+      lane =
+        side === "left"
+          ? position.x - LOOP_LANE
+          : position.x + position.width + LOOP_LANE;
+    }
+  } while (lane !== previous);
+  return lane;
+}
+
+function edgePath(from, to, positions, centerEntries) {
   const startX = from.x + from.width / 2;
   const startY = from.y + from.height;
-  const endX = to.x + to.width / 2;
   const endY = to.y;
   if (endY > startY) {
+    const endX = to.x + to.width / 2;
     const middle = startY + (endY - startY) / 2;
-    return `M ${startX} ${startY} C ${startX} ${middle}, ${endX} ${middle}, ${endX} ${endY}`;
+    return `M ${startX} ${startY} L ${startX} ${startY + EDGE_TAIL} C ${startX} ${middle}, ${endX} ${middle}, ${endX} ${endY - EDGE_TAIL} L ${endX} ${endY}`;
   }
-  const side = Math.max(from.x + from.width, to.x + to.width) + 34;
-  return `M ${startX} ${startY} C ${side} ${startY + 30}, ${side} ${endY - 30}, ${endX} ${endY}`;
+  const side = loopSide(from, to, positions);
+  let lane = side === "left" ? to.x - LOOP_LANE : to.x + to.width + LOOP_LANE;
+  lane = clearLoopLane(lane, side, from, to, positions);
+  if (
+    centerEntries.some(
+      (entry) =>
+        entry.x === lane && entry.y >= endY && entry.y <= startY + Y_GAP,
+    )
+  ) {
+    lane += side === "left" ? -RETURN_SEPARATION : RETURN_SEPARATION;
+    lane = clearLoopLane(lane, side, from, to, positions);
+  }
+  const endX = to.x + to.width * (side === "left" ? 0.25 : 0.75);
+  const bend = Y_GAP - EDGE_TAIL;
+  return `M ${startX} ${startY} L ${startX} ${startY + EDGE_TAIL} C ${startX} ${startY + bend}, ${lane} ${startY + bend}, ${lane} ${startY + EDGE_TAIL} L ${lane} ${endY - EDGE_TAIL} C ${lane} ${endY - bend}, ${endX} ${endY - bend}, ${endX} ${endY - EDGE_TAIL} L ${endX} ${endY}`;
 }
 
 export function applySimulation(root, run) {
@@ -308,13 +377,24 @@ export function mountGraph(root, program, scenario = {}, onChange = () => {}) {
   svg.setAttribute("aria-hidden", "true");
   svg.innerHTML =
     '<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" /></marker></defs>';
+  const positions = [...layout.positions.values()];
+  const centerEntries = program.edges.flatMap((edge) => {
+    const from = layout.positions.get(edge.from);
+    const to = layout.positions.get(edge.to);
+    return from && to && to.y > from.y + from.height
+      ? [{ x: to.x + to.width / 2, y: to.y }]
+      : [];
+  });
   for (const edge of program.edges) {
     const from = layout.positions.get(edge.from);
     const to = layout.positions.get(edge.to);
     if (!from || !to) continue;
     const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    path.setAttribute("d", edgePath(from, to));
-    path.setAttribute("class", `flow-edge ${edge.role}`);
+    path.setAttribute("d", edgePath(from, to, positions, centerEntries));
+    path.setAttribute(
+      "class",
+      `flow-edge ${edge.role}${edge.nonlinear ? " nonlinear" : ""}`,
+    );
     path.setAttribute("marker-end", "url(#arrow)");
     path.dataset.edge = edge.id;
     svg.append(path);
@@ -352,11 +432,26 @@ export function mountGraph(root, program, scenario = {}, onChange = () => {}) {
   let scale = 1;
   let x = 0;
   let y = 0;
+  let focusedNode = null;
   const apply = () => {
     scene.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
     controls.querySelector("output").value = `${Math.round(scale * 100)}%`;
   };
-  const fit = (minimum = 0.25) => {
+  const zoom = (nextScale, anchor) => {
+    const viewportBounds = viewport.getBoundingClientRect();
+    const nodeBounds = focusedNode?.getBoundingClientRect();
+    anchor ||= nodeBounds
+      ? {
+          x: nodeBounds.left + nodeBounds.width / 2 - viewportBounds.left,
+          y: nodeBounds.top + nodeBounds.height / 2 - viewportBounds.top,
+        }
+      : { x: viewport.clientWidth / 2, y: viewport.clientHeight / 2 };
+    nextScale = Math.min(2, Math.max(0.25, nextScale));
+    x = anchor.x - ((anchor.x - x) * nextScale) / scale;
+    y = anchor.y - ((anchor.y - y) * nextScale) / scale;
+    scale = nextScale;
+  };
+  const fit = (minimum = 0) => {
     scale = Math.max(
       minimum,
       Math.min(
@@ -370,9 +465,9 @@ export function mountGraph(root, program, scenario = {}, onChange = () => {}) {
     apply();
   };
   for (const [label, title, action] of [
-    ["−", "Zoom out", () => (scale = Math.max(0.25, scale - 0.1))],
-    ["+", "Zoom in", () => (scale = Math.min(2, scale + 0.1))],
-    ["100", "Actual size", () => ((scale = 1), (x = 24), (y = 24))],
+    ["−", "Zoom out", () => zoom(scale - 0.1)],
+    ["+", "Zoom in", () => zoom(scale + 0.1)],
+    ["100", "Actual size", () => zoom(1)],
     ["Fit", "Fit graph", fit],
   ]) {
     const button = element("button", "", label);
@@ -386,9 +481,12 @@ export function mountGraph(root, program, scenario = {}, onChange = () => {}) {
     controls.append(button);
   }
   controls.append(element("output", "", "100%"));
+  viewport.addEventListener("focusin", (event) => {
+    focusedNode = event.target.closest(".flow-node") || focusedNode;
+  });
   let drag = null;
   viewport.addEventListener("pointerdown", (event) => {
-    if (event.target.closest(".flow-node")) return;
+    if (event.target.closest("input, select, textarea, button")) return;
     drag = { x: event.clientX - x, y: event.clientY - y };
     viewport.setPointerCapture(event.pointerId);
   });
@@ -398,15 +496,25 @@ export function mountGraph(root, program, scenario = {}, onChange = () => {}) {
     y = event.clientY - drag.y;
     apply();
   });
-  viewport.addEventListener("pointerup", () => (drag = null));
+  for (const event of ["pointerup", "pointercancel", "lostpointercapture"]) {
+    viewport.addEventListener(event, () => (drag = null));
+  }
   viewport.addEventListener(
     "wheel",
     (event) => {
+      const source = event.target.closest(".node-source");
+      if (
+        source &&
+        (source.scrollHeight > source.clientHeight ||
+          source.scrollWidth > source.clientWidth)
+      )
+        return;
       event.preventDefault();
-      scale = Math.min(
-        2,
-        Math.max(0.25, scale + (event.deltaY < 0 ? 0.1 : -0.1)),
-      );
+      const bounds = viewport.getBoundingClientRect();
+      zoom(scale + (event.deltaY < 0 ? 0.1 : -0.1), {
+        x: event.clientX - bounds.left,
+        y: event.clientY - bounds.top,
+      });
       apply();
     },
     { passive: false },

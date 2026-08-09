@@ -1,6 +1,6 @@
 {
   "name": "batflow",
-  "version": "0.6.0",
+  "version": "0.6.3",
   "private": true,
   "type": "module",
   "description": "A static MS-DOS 7.1 control-flow visualizer.",

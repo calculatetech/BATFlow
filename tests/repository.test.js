@@ -10,9 +10,21 @@ const read = (path) => readFileSync(join(root, path), "utf8");
 
 test("the rebuild is a static memory-only application", () => {
   const manifest = JSON.parse(read("package.json"));
-  assert.equal(manifest.version, "0.6.0");
-  assert.match(read("public/index.html"), /app\.js\?v=0\.6\.0/);
-  assert.match(read("public/index.html"), /styles\.css\?v=0\.6\.0/);
+  const lock = JSON.parse(read("package-lock.json"));
+  assert.equal(manifest.version, "0.6.3");
+  assert.equal(lock.version, manifest.version);
+  assert.equal(lock.packages[""].version, manifest.version);
+  for (const path of [
+    "public/index.html",
+    "public/app.js",
+    "public/lib/config.js",
+    "public/lib/flow.js",
+    "public/lib/simulate.js",
+  ]) {
+    for (const match of read(path).matchAll(/\?v=([\d.]+)/g)) {
+      assert.equal(match[1], manifest.version, `${path} has a stale cache key`);
+    }
+  }
   assert.doesNotMatch(
     read("public/app.js"),
     /indexedDB|serviceWorker|localStorage|sessionStorage|\.batflow/i,
