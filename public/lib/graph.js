@@ -447,7 +447,7 @@ export function mountGraph(root, program, scenario = {}, onChange = () => {}) {
           y: nodeBounds.top + nodeBounds.height / 2 - viewportBounds.top,
         }
       : { x: viewport.clientWidth / 2, y: viewport.clientHeight / 2 };
-    nextScale = Math.min(2, Math.max(0.25, nextScale));
+    nextScale = Math.min(2, Math.max(Math.min(0.25, scale), nextScale));
     x = anchor.x - ((anchor.x - x) * nextScale) / scale;
     y = anchor.y - ((anchor.y - y) * nextScale) / scale;
     scale = nextScale;

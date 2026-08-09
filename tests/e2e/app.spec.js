@@ -316,6 +316,14 @@ test("fits a very tall graph below the manual zoom floor", async ({ page }) => {
   expect(
     Number.parseInt(await page.locator(".graph-controls output").textContent()),
   ).toBeLessThan(25);
+  const fittedScale = await page
+    .locator(".graph-controls output")
+    .textContent();
+  await page.getByRole("button", { name: "Zoom out" }).click();
+  await expect(page.locator(".graph-controls output")).toHaveText(fittedScale);
+  await page.mouse.move(viewport.x + 20, viewport.y + 20);
+  await page.mouse.wheel(0, 100);
+  await expect(page.locator(".graph-controls output")).toHaveText(fittedScale);
 });
 
 test("renders 2,000 lines within the desktop budget", async ({ page }) => {
