@@ -315,7 +315,8 @@ function edgePath(from, to, positions, centerEntries) {
   }
   const endX = to.x + to.width * (side === "left" ? 0.25 : 0.75);
   const bend = Y_GAP - EDGE_TAIL;
-  return `M ${startX} ${startY} L ${startX} ${startY + EDGE_TAIL} C ${startX} ${startY + bend}, ${lane} ${startY + bend}, ${lane} ${startY + EDGE_TAIL} L ${lane} ${endY - EDGE_TAIL} C ${lane} ${endY - bend}, ${endX} ${endY - bend}, ${endX} ${endY - EDGE_TAIL} L ${endX} ${endY}`;
+  const upperBend = Math.min(bend, endY - EDGE_TAIL);
+  return `M ${startX} ${startY} L ${startX} ${startY + EDGE_TAIL} C ${startX} ${startY + bend}, ${lane} ${startY + bend}, ${lane} ${startY + EDGE_TAIL} L ${lane} ${endY - EDGE_TAIL} C ${lane} ${endY - upperBend}, ${endX} ${endY - upperBend}, ${endX} ${endY - EDGE_TAIL} L ${endX} ${endY}`;
 }
 
 export function applySimulation(root, run) {
@@ -505,10 +506,15 @@ export function mountGraph(root, program, scenario = {}, onChange = () => {}) {
       const source = event.target.closest(".node-source");
       if (
         source &&
-        (source.scrollHeight > source.clientHeight ||
-          source.scrollWidth > source.clientWidth)
+        ((event.deltaY < 0 && source.scrollTop > 0) ||
+          (event.deltaY > 0 &&
+            source.scrollTop < source.scrollHeight - source.clientHeight - 1) ||
+          (event.deltaX < 0 && source.scrollLeft > 0) ||
+          (event.deltaX > 0 &&
+            source.scrollLeft < source.scrollWidth - source.clientWidth - 1))
       )
         return;
+      if (!event.deltaY) return;
       event.preventDefault();
       const bounds = viewport.getBoundingClientRect();
       zoom(scale + (event.deltaY < 0 ? 0.1 : -0.1), {

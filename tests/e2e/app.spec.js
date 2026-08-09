@@ -240,8 +240,12 @@ test("anchors zoom and pans from graph blocks without trapping inputs", async ({
   await expect
     .poll(() => source.evaluate((element) => element.scrollTop))
     .toBeGreaterThan(0);
-  await page.mouse.wheel(0, 2000);
   expect(await page.locator(".graph-controls output").textContent()).toBe(zoom);
+  await source.evaluate(
+    (element) => (element.scrollTop = element.scrollHeight),
+  );
+  await page.mouse.wheel(0, 200);
+  await expect(page.locator(".graph-controls output")).not.toHaveText(zoom);
 
   await page.locator("#fileInput").setInputFiles({
     name: "AUTOEXEC.BAT",
@@ -278,6 +282,8 @@ test("anchors zoom and pans from graph blocks without trapping inputs", async ({
   expect(await page.locator(".graph-controls output").textContent()).toBe(
     wideZoom,
   );
+  await page.mouse.wheel(0, -100);
+  await expect(page.locator(".graph-controls output")).not.toHaveText(wideZoom);
 });
 
 test("fits a very tall graph below the manual zoom floor", async ({ page }) => {
@@ -592,6 +598,17 @@ test("routes returns through clear lanes and separates opposing flow", async ({
       });
     }),
   ).toBe(true);
+
+  await page.locator("#fileInput").setInputFiles({
+    name: "AUTOEXEC.BAT",
+    mimeType: "text/plain",
+    buffer: Buffer.from("AUTOEXEC.BAT\r\n"),
+  });
+  expect(
+    await page
+      .locator(".flow-edge.transfer")
+      .evaluate((edge) => edge.getBBox().y),
+  ).toBeGreaterThanOrEqual(0);
 });
 
 test("shows a warning when a cycle executes no source rows", async ({
