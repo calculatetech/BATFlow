@@ -134,6 +134,14 @@ test("a GOTO remains non-linear when its target is the following block", () => {
     parseBatch(source('if "1"=="1" echo unchanged')),
   );
   assert.ok(linearIf.edges.every((item) => !item.nonlinear));
+
+  const conditionalExit = buildBatchFlow(
+    parseBatch(source("if errorlevel 1 exit")),
+  );
+  assert.equal(
+    conditionalExit.edges.find((item) => item.role === "true").nonlinear,
+    true,
+  );
 });
 
 test("loops, literal jumps, and dynamic jumps expose every possible edge", () => {

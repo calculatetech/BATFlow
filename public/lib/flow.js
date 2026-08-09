@@ -31,6 +31,7 @@ const NONLINEAR_ROLES = new Set([
 ]);
 const NONLINEAR_ACTIONS = new Set([
   "call",
+  "exit",
   "goto",
   "shell-call",
   "shell-transfer",
